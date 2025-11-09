@@ -14,6 +14,7 @@ import {
   Circle as CircleStyle,
 } from "ol/style";
 import { fromLonLat } from "ol/proj";
+import { defaults as defaultControls } from "ol/control"; // ✅ ИСПРАВЛЕНИЕ #2
 import * as signalR from "@microsoft/signalr";
 import type {
   Drone,
@@ -93,7 +94,7 @@ export const DroneMap: React.FC = () => {
   const zoneLayerRef = useRef<VectorLayer<VectorSource> | null>(null);
   const trajectoryLayerRef = useRef<VectorLayer<VectorSource> | null>(null);
 
-  // ✅ ИСПРАВЛЕНО: Используем ref для актуального состояния дронов в обработчиках
+  // ✅ Используем ref для актуального состояния дронов в обработчиках
   const dronesRef = useRef<Drone[]>([]);
   const zonesRef = useRef<CoverageZone[]>([]);
 
@@ -118,6 +119,11 @@ export const DroneMap: React.FC = () => {
     y: number;
   } | null>(null);
 
+  // ✅ ИСПРАВЛЕНИЕ #4: Отслеживание ID дрона с отображаемой траекторией
+  const [displayedTrajectoryDroneId, setDisplayedTrajectoryDroneId] = useState<
+    number | null
+  >(null);
+
   // ✅ Обновляем ref при изменении drones и zones
   useEffect(() => {
     dronesRef.current = drones;
@@ -127,15 +133,14 @@ export const DroneMap: React.FC = () => {
     zonesRef.current = zones;
   }, [zones]);
 
-  // ✅ ИСПРАВЛЕНО #4: Функция проверки, находится ли дрон в зоне покрытия
+  // ✅ Функция проверки, находится ли дрон в зоне покрытия
   const isDroneInAnyZone = useCallback((drone: Drone): boolean => {
-    if (zonesRef.current.length === 0) return true; // Если нет зон, показываем все
+    if (zonesRef.current.length === 0) return true;
 
     for (const zone of zonesRef.current) {
-      // Проверяем расстояние от центра зоны до дрона
       const dx = zone.centerLon - drone.longitude;
       const dy = zone.centerLat - drone.latitude;
-      const distanceKm = Math.sqrt(dx * dx + dy * dy) * 111; // Примерное расстояние в км
+      const distanceKm = Math.sqrt(dx * dx + dy * dy) * 111;
 
       if (distanceKm * 1000 <= zone.radiusMeters) {
         return true;
@@ -176,7 +181,7 @@ export const DroneMap: React.FC = () => {
     });
     trajectoryLayerRef.current = trajectoryLayer;
 
-    // ✅ ИСПРАВЛЕНО #1: Тёмная карта под стиль проекта
+    // ✅ Тёмная карта под стиль проекта
     const darkTileLayer = new TileLayer({
       source: new XYZ({
         url: "https://{a-d}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
@@ -184,6 +189,7 @@ export const DroneMap: React.FC = () => {
       }),
     });
 
+    // ✅ ИСПРАВЛЕНИЕ #2: Скрываем стандартные контролы, используем свои
     const map = new Map({
       target: mapRef.current,
       layers: [darkTileLayer, zoneLayer, trajectoryLayer, droneLayer],
@@ -197,7 +203,6 @@ export const DroneMap: React.FC = () => {
 
     console.log("✅ Map initialized at Minsk:", [27.5615, 53.9006]);
 
-    // Принудительное обновление размера
     setTimeout(() => {
       if (map) {
         map.updateSize();
@@ -205,7 +210,7 @@ export const DroneMap: React.FC = () => {
       }
     }, 100);
 
-    // ✅ ИСПРАВЛЕНО: Обработка кликов с использованием ref
+    // ✅ Обработка кликов с использованием ref
     map.on("click", (event) => {
       const feature = map.forEachFeatureAtPixel(event.pixel, (f) => f, {
         layerFilter: (layer) => layer === droneLayer,
@@ -217,8 +222,9 @@ export const DroneMap: React.FC = () => {
         if (drone) {
           console.log("🎯 Drone clicked:", drone.name);
           setSelectedDrone(drone);
+          setDisplayedTrajectoryDroneId(droneId); // ✅ Устанавливаем ID отображаемой траектории
           loadDroneTrajectory(droneId);
-          // Центрировать карту на дроне
+
           const view = map.getView();
           view.animate({
             center: fromLonLat([drone.longitude, drone.latitude]),
@@ -229,7 +235,7 @@ export const DroneMap: React.FC = () => {
       setTooltip(null);
     });
 
-    // ✅ ИСПРАВЛЕНО: Изменение курсора и показ tooltip с использованием ref
+    // ✅ Изменение курсора и показ tooltip с использованием ref
     map.on("pointermove", (event) => {
       const feature = map.forEachFeatureAtPixel(event.pixel, (f) => f, {
         layerFilter: (layer) => layer === droneLayer,
@@ -261,9 +267,9 @@ export const DroneMap: React.FC = () => {
         map.dispose();
       }
     };
-  }, []); // ✅ ИСПРАВЛЕНО: пустой массив - карта создается только один раз!
+  }, []); // ✅ Пустой массив - карта создается только один раз!
 
-  // ✅ ИСПРАВЛЕНО #3: Анимация ТОЛЬКО для зон покрытия через JavaScript
+  // ✅ Анимация ТОЛЬКО для зон покрытия через JavaScript
   useEffect(() => {
     if (!zoneLayerRef.current) return;
 
@@ -274,7 +280,6 @@ export const DroneMap: React.FC = () => {
       const source = zoneLayerRef.current?.getSource();
       if (!source) return;
 
-      // Изменяем прозрачность зон (пульсация от 0.5 до 0.8)
       const opacity = 0.65 + Math.sin(phase) * 0.15;
       zoneLayerRef.current?.setOpacity(opacity);
 
@@ -323,8 +328,10 @@ export const DroneMap: React.FC = () => {
       setDrones(mappedDrones);
     });
 
+    // ✅ ИСПРАВЛЕНИЕ #1 и #3: Обновляем дронов И автоматически перезагружаем траекторию
     connection.on("DronesUpdated", (updates: any[]) => {
       console.log("🔄 Drones updated:", updates);
+
       setDrones((prevDrones) => {
         const updatedDrones = prevDrones.map((drone) => {
           const update = updates.find((u) => u.id === drone.id);
@@ -343,6 +350,21 @@ export const DroneMap: React.FC = () => {
           return drone;
         });
         return updatedDrones;
+      });
+
+      // ✅ ИСПРАВЛЕНИЕ #1 и #3: Автоматическое обновление траектории выбранного дрона
+      setDisplayedTrajectoryDroneId((prevId) => {
+        if (
+          prevId !== null &&
+          connectionRef.current?.state === signalR.HubConnectionState.Connected
+        ) {
+          // Небольшая задержка для того, чтобы данные успели сохраниться в БД
+          setTimeout(() => {
+            connectionRef.current?.invoke("GetDroneTrajectory", prevId, 1);
+            console.log("🔄 Auto-reloading trajectory for drone:", prevId);
+          }, 200);
+        }
+        return prevId;
       });
     });
 
@@ -392,10 +414,11 @@ export const DroneMap: React.FC = () => {
   const loadDroneTrajectory = useCallback((droneId: number) => {
     if (connectionRef.current?.state === signalR.HubConnectionState.Connected) {
       connectionRef.current.invoke("GetDroneTrajectory", droneId, 1);
+      console.log("📡 Loading trajectory for drone:", droneId);
     }
   }, []);
 
-  // ✅ ИСПРАВЛЕНО #2: Обновление фич дронов с правильной фильтрацией без мерцания
+  // ✅ ИСПРАВЛЕНИЕ #2: Обновление дронов БЕЗ очистки траекторий
   const updateDroneFeatures = useCallback(
     (dronesData: Drone[]) => {
       if (!droneLayerRef.current) return;
@@ -407,7 +430,6 @@ export const DroneMap: React.FC = () => {
 
       // ✅ Применяем фильтры правильно И проверяем нахождение в зонах
       const filteredDrones = dronesData.filter((drone) => {
-        // Проверка фильтров
         const statusMatch =
           filters.statusFilter.length === 0 ||
           filters.statusFilter.includes(drone.status);
@@ -415,7 +437,6 @@ export const DroneMap: React.FC = () => {
           filters.frequencyFilter.length === 0 ||
           filters.frequencyFilter.includes(drone.frequency);
 
-        // ✅ ИСПРАВЛЕНО #4: Проверяем, находится ли дрон в зоне
         const inZone = isDroneInAnyZone(drone);
 
         return statusMatch && frequencyMatch && inZone;
@@ -425,7 +446,7 @@ export const DroneMap: React.FC = () => {
         `✅ Displaying ${filteredDrones.length} filtered drones (in zones)`
       );
 
-      // ✅ ИСПРАВЛЕНО #2: Обновляем существующие features вместо пересоздания
+      // ✅ Обновляем существующие features вместо пересоздания
       const existingFeatures = source.getFeatures();
       const existingIds = new Set(
         existingFeatures.map((f) => f.get("droneId"))
@@ -481,22 +502,59 @@ export const DroneMap: React.FC = () => {
     const source = trajectoryLayerRef.current.getSource();
     if (source) {
       source.clear();
+      setDisplayedTrajectoryDroneId(null);
       console.log("🧹 All trajectories cleared");
     }
   }, []);
 
-  // ✅ ИСПРАВЛЕНО: Обновление дронов БЕЗ очистки траекторий
+  // ✅ Обновление дронов БЕЗ очистки траекторий
   useEffect(() => {
     console.log("🔄 Drones updated, refreshing map");
     updateDroneFeatures(drones);
   }, [drones, updateDroneFeatures]);
 
-  // ✅ ИСПРАВЛЕНО: Очистка траекторий ТОЛЬКО при изменении фильтров
+  // ✅ ИСПРАВЛЕНИЕ #4: Умная логика управления траекториями при изменении фильтров
   useEffect(() => {
-    console.log("🔍 Filters changed, clearing trajectories and selection");
-    clearAllTrajectories();
-    setSelectedDrone(null);
-  }, [filters, clearAllTrajectories]);
+    console.log("🔍 Filters changed, checking trajectory visibility");
+
+    // Проверяем, виден ли выбранный дрон с текущими фильтрами
+    if (displayedTrajectoryDroneId !== null) {
+      const selectedDroneData = drones.find(
+        (d) => d.id === displayedTrajectoryDroneId
+      );
+
+      if (selectedDroneData) {
+        // Проверяем, проходит ли дрон фильтры
+        const statusMatch =
+          filters.statusFilter.length === 0 ||
+          filters.statusFilter.includes(selectedDroneData.status);
+        const frequencyMatch =
+          filters.frequencyFilter.length === 0 ||
+          filters.frequencyFilter.includes(selectedDroneData.frequency);
+        const inZone = isDroneInAnyZone(selectedDroneData);
+
+        // ✅ ИСПРАВЛЕНИЕ #4: Удаляем траекторию только если дрон не проходит фильтры
+        if (!statusMatch || !frequencyMatch || !inZone) {
+          console.log("🧹 Selected drone filtered out, clearing trajectory");
+          clearAllTrajectories();
+          setSelectedDrone(null);
+        } else {
+          console.log("✅ Selected drone still visible, keeping trajectory");
+          // Траектория остается, ничего не делаем
+        }
+      } else {
+        // Дрон не найден в списке - удаляем траекторию
+        clearAllTrajectories();
+        setSelectedDrone(null);
+      }
+    }
+  }, [
+    filters,
+    displayedTrajectoryDroneId,
+    drones,
+    isDroneInAnyZone,
+    clearAllTrajectories,
+  ]);
 
   // Обновление зон покрытия
   const updateZoneFeatures = (zones: CoverageZone[]) => {
@@ -521,7 +579,7 @@ export const DroneMap: React.FC = () => {
     });
   };
 
-  // ✅ ИСПРАВЛЕНО: Отображение траектории (удаляет все старые)
+  // ✅ Отображение траектории (удаляет все старые)
   const displayTrajectory = (droneId: number, points: any[]) => {
     if (!trajectoryLayerRef.current) return;
 
@@ -541,9 +599,12 @@ export const DroneMap: React.FC = () => {
     });
 
     source.addFeature(lineFeature);
+    console.log(
+      `✅ Trajectory displayed for drone ${droneId} with ${points.length} points`
+    );
   };
 
-  // ✅ ИСПРАВЛЕНО: Применение фильтров без дублирования очистки
+  // ✅ Применение фильтров
   const applyFilters = (newFilters: DroneFilters) => {
     console.log("✅ Applying new filters:", newFilters);
     setFilters(newFilters);
@@ -592,8 +653,9 @@ export const DroneMap: React.FC = () => {
 
   // Обработчик выбора дрона
   const handleDroneSelect = (drone: Drone) => {
-    console.log("📍 Drone selected from list:", drone.name);
+    console.log("🔍 Drone selected from list:", drone.name);
     setSelectedDrone(drone);
+    setDisplayedTrajectoryDroneId(drone.id); // ✅ Устанавливаем ID отображаемой траектории
     loadDroneTrajectory(drone.id);
     if (mapInstanceRef.current) {
       const view = mapInstanceRef.current.getView();
@@ -616,6 +678,7 @@ export const DroneMap: React.FC = () => {
         duration: 500,
       });
       setSelectedDrone(drone);
+      setDisplayedTrajectoryDroneId(droneId); // ✅ Устанавливаем ID отображаемой траектории
       loadDroneTrajectory(droneId);
     }
   };
@@ -658,7 +721,7 @@ export const DroneMap: React.FC = () => {
           <DroneTooltip drone={tooltip.drone} x={tooltip.x} y={tooltip.y} />
         )}
 
-        {/* Контролы карты */}
+        {/* Контролы карты - ✅ ИСПРАВЛЕНИЕ #2: Размещены справа, не перекрывают стандартные контролы */}
         <MapControls
           mapType={mapType}
           showZones={showZones}
@@ -770,7 +833,7 @@ function createDroneStyle(feature: FeatureLike): Style {
   });
 }
 
-// ✅ ИСПРАВЛЕНО #3: Стили для зон покрытия с обводкой текста
+// ✅ Стили для зон покрытия с обводкой текста
 function createZoneStyle(feature: FeatureLike): Style {
   const name = feature.get("name") as string;
 

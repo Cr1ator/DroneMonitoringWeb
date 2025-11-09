@@ -46,9 +46,28 @@ export const DroneInfoPanel: React.FC<DroneInfoPanelProps> = ({
   const [history, setHistory] = useState<HistoryPoint[]>([]);
   const [loading, setLoading] = useState(false);
 
+  // ✅ ИСПРАВЛЕНИЕ #1: Используем ref для хранения ID интервала автообновления
+  const autoReloadIntervalRef = useRef<number | null>(null);
+
+  // ✅ ИСПРАВЛЕНИЕ #1: Загружаем историю при монтировании и при изменении drone.id
   useEffect(() => {
     loadDroneHistory();
-  }, [drone.id]);
+
+    // ✅ ИСПРАВЛЕНИЕ #1: Настраиваем автоматическое обновление каждые 3 секунды
+    autoReloadIntervalRef.current = setInterval(() => {
+      loadDroneHistory();
+    }, 3000); // Обновление каждые 3 секунды
+
+    console.log("✅ Auto-reload interval started for drone:", drone.id);
+
+    // Очистка интервала при размонтировании или смене дрона
+    return () => {
+      if (autoReloadIntervalRef.current) {
+        clearInterval(autoReloadIntervalRef.current);
+        console.log("🧹 Auto-reload interval cleared");
+      }
+    };
+  }, [drone.id]); // Перезапускаем при смене дрона
 
   const loadDroneHistory = async () => {
     setLoading(true);
@@ -59,6 +78,7 @@ export const DroneInfoPanel: React.FC<DroneInfoPanelProps> = ({
       if (response.ok) {
         const data = await response.json();
         setHistory(data);
+        console.log("🔄 Drone history reloaded:", data.length, "points");
       }
     } catch (error) {
       console.error("Error loading drone history:", error);
@@ -92,7 +112,7 @@ export const DroneInfoPanel: React.FC<DroneInfoPanelProps> = ({
     return `${heading.toFixed(0)}° (${directions[index]})`;
   };
 
-  // ✅ ИСПРАВЛЕНО #6: График высоты с использованием Chart.js
+  // ✅ График высоты с использованием Chart.js
   const altitudeChartData = {
     labels: history.map((_, index) => index).reverse(),
     datasets: [
@@ -109,7 +129,7 @@ export const DroneInfoPanel: React.FC<DroneInfoPanelProps> = ({
     ],
   };
 
-  // ✅ ИСПРАВЛЕНО #6: График скорости с использованием Chart.js
+  // ✅ График скорости с использованием Chart.js
   const speedChartData = {
     labels: history.map((_, index) => index).reverse(),
     datasets: [
@@ -130,6 +150,9 @@ export const DroneInfoPanel: React.FC<DroneInfoPanelProps> = ({
   const chartOptions = {
     responsive: true,
     maintainAspectRatio: false,
+    animation: {
+      duration: 300, // ✅ Короткая анимация для плавного обновления
+    },
     plugins: {
       legend: {
         display: false,
@@ -162,7 +185,7 @@ export const DroneInfoPanel: React.FC<DroneInfoPanelProps> = ({
   };
 
   return (
-    <div className="absolute bottom-4 right-4 w-96 military-panel rounded-lg shadow-2xl overflow-hidden">
+    <div className="absolute bottom-4 right-4 w-96 military-panel rounded-lg shadow-2xl overflow-hidden animate-slideInRight">
       {/* Заголовок */}
       <div
         className={`px-4 py-3 ${
@@ -210,9 +233,14 @@ export const DroneInfoPanel: React.FC<DroneInfoPanelProps> = ({
         >
           ● Статус: {drone.status === "Active" ? "АКТИВЕН" : "НЕАКТИВЕН"}
         </div>
+        {/* ✅ ИСПРАВЛЕНИЕ #1: Индикатор автообновления */}
+        <div className="text-xs text-gray-400 mt-1 flex items-center">
+          <div className="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></div>
+          Автообновление каждые 3 сек
+        </div>
       </div>
 
-      {/* Текущие параметры */}
+      {/* Текущие параметры - ✅ ИСПРАВЛЕНИЕ #1: Данные обновляются через prop drone */}
       <div className="p-4 bg-gray-900/30">
         <h4 className="text-xs font-semibold text-gray-400 mb-3 uppercase">
           Текущие параметры
@@ -261,7 +289,7 @@ export const DroneInfoPanel: React.FC<DroneInfoPanelProps> = ({
         </div>
       </div>
 
-      {/* ✅ ИСПРАВЛЕНО #6: Улучшенные графики с Chart.js */}
+      {/* ✅ Улучшенные графики с Chart.js */}
       {history.length > 0 && (
         <div className="p-4 bg-gray-900/50 border-t border-green-500/20 space-y-3">
           {/* График высоты */}
@@ -322,7 +350,7 @@ export const DroneInfoPanel: React.FC<DroneInfoPanelProps> = ({
           <div className="space-y-2">
             {history.map((point, index) => (
               <div
-                key={index}
+                key={`${point.timestamp}-${index}`}
                 className="bg-gray-800/50 p-2 rounded text-xs border border-green-500/10 hover:border-green-500/30 transition-colors"
               >
                 <div className="flex justify-between items-center">

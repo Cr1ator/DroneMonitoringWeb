@@ -7,8 +7,8 @@ interface MapControlsProps {
   onToggleMapType: () => void;
   onToggleZones: () => void;
   onToggleTrajectories: () => void;
-  onCenterMap: () => void; // ✅ ДОБАВЛЕНО
-  onResetZoom: () => void; // ✅ ДОБАВЛЕНО
+  onCenterMap: () => void;
+  onResetZoom: () => void;
 }
 
 export const MapControls: React.FC<MapControlsProps> = ({
@@ -22,7 +22,9 @@ export const MapControls: React.FC<MapControlsProps> = ({
   onResetZoom,
 }) => {
   return (
-    <div className="absolute top-4 left-4 military-panel rounded-lg shadow-lg p-4 min-w-[200px]">
+    // ✅ ИСПРАВЛЕНИЕ #2: Изменено позиционирование с top-4 left-4 на bottom-4 left-4
+    // Теперь панель не перекрывает стандартные кнопки масштабирования OpenLayers
+    <div className="absolute bottom-4 left-4 military-panel rounded-lg shadow-lg p-4 min-w-[200px] z-10">
       <h3 className="text-sm font-semibold text-gray-400 mb-3 flex items-center uppercase tracking-wider">
         <svg
           className="w-4 h-4 mr-2"
@@ -211,18 +213,20 @@ export const MapControls: React.FC<MapControlsProps> = ({
           </div>
         </div>
 
-        {/* ✅ ИСПРАВЛЕНО: Кнопки быстрых действий */}
+        {/* ✅ Кнопки быстрых действий */}
         <div className="pt-3 border-t border-green-500/20">
           <div className="grid grid-cols-2 gap-2">
             <button
               onClick={onCenterMap}
               className="px-2 py-2 military-button rounded text-green-400 text-xs font-semibold uppercase tracking-wider hover:bg-green-500/20"
+              title="Центрировать карту на Минске"
             >
               📍 Центр
             </button>
             <button
               onClick={onResetZoom}
               className="px-2 py-2 military-button rounded text-green-400 text-xs font-semibold uppercase tracking-wider hover:bg-green-500/20"
+              title="Сбросить масштаб"
             >
               🔍 Сброс
             </button>
