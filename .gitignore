@@ -1,0 +1,36 @@
+# === .NET ===
+bin/
+obj/
+*.dll
+*.exe
+*.pdb
+*.suo
+*.user
+.vs/
+.vscode/
+*.csproj.user
+launchSettings.json
+
+# === Node / React ===
+node_modules/
+dist/
+build/
+.env
+.env.local
+.env.*.local
+npm-debug.log*
+
+# === IDE ===
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# === Logs ===
+*.log
+logs/
+
+# === Database ===
+*.db
+*.sqlite

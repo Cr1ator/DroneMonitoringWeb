@@ -1,0 +1,268 @@
+@import "tailwindcss";
+
+/* OpenLayers базовые стили */
+@import "ol/ol.css";
+
+/* Дополнительные стили для карты */
+.ol-viewport {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.ol-control {
+  position: absolute;
+  background-color: rgba(255, 255, 255, 0.4);
+  border-radius: 4px;
+  padding: 2px;
+}
+
+.ol-control button {
+  display: block;
+  margin: 1px;
+  padding: 0;
+  color: white;
+  font-size: 1.14em;
+  font-weight: bold;
+  text-decoration: none;
+  text-align: center;
+  height: 1.375em;
+  width: 1.375em;
+  line-height: 0.4em;
+  background-color: rgba(0, 60, 136, 0.5);
+  border: none;
+  border-radius: 2px;
+}
+
+.ol-control button:hover {
+  background-color: rgba(0, 60, 136, 0.7);
+}
+
+/* ========================================
+   ВОЕННЫЙ СТИЛЬ И АНИМАЦИИ
+   ======================================== */
+
+/* ✅ ИСПРАВЛЕНО: Анимация только для tooltip, НЕ для всей карты */
+@keyframes pulse-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 10px rgba(34, 197, 94, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(34, 197, 94, 0.8);
+  }
+}
+
+@keyframes radar-sweep {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes blink {
+  0%,
+  50%,
+  100% {
+    opacity: 1;
+  }
+  25%,
+  75% {
+    opacity: 0.5;
+  }
+}
+
+/* Tooltip для дронов */
+.drone-tooltip {
+  position: fixed;
+  background: linear-gradient(
+    135deg,
+    rgba(30, 41, 59, 0.98) 0%,
+    rgba(15, 23, 42, 0.98) 100%
+  );
+  border: 2px solid rgba(34, 197, 94, 0.6);
+  border-radius: 8px;
+  padding: 12px;
+  pointer-events: none;
+  z-index: 10000;
+  min-width: 200px;
+  box-shadow: 0 0 20px rgba(34, 197, 94, 0.4), 0 4px 20px rgba(0, 0, 0, 0.5);
+  animation: fadeIn 0.2s ease-in;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.drone-tooltip::before {
+  content: "";
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  background: linear-gradient(
+    45deg,
+    rgba(34, 197, 94, 0.2),
+    rgba(34, 197, 94, 0.1),
+    rgba(34, 197, 94, 0.2)
+  );
+  border-radius: 8px;
+  z-index: -1;
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+/* Военный стиль для панелей */
+.military-panel {
+  background: linear-gradient(
+    180deg,
+    rgba(17, 24, 39, 0.95) 0%,
+    rgba(31, 41, 55, 0.95) 100%
+  );
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  box-shadow: inset 0 1px 0 rgba(34, 197, 94, 0.1), 0 0 30px rgba(0, 0, 0, 0.5);
+}
+
+.military-header {
+  background: linear-gradient(
+    90deg,
+    rgba(34, 197, 94, 0.2) 0%,
+    rgba(34, 197, 94, 0.05) 100%
+  );
+  border-bottom: 2px solid rgba(34, 197, 94, 0.5);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-weight: 700;
+}
+
+.military-button {
+  background: linear-gradient(
+    135deg,
+    rgba(34, 197, 94, 0.3) 0%,
+    rgba(22, 163, 74, 0.3) 100%
+  );
+  border: 1px solid rgba(34, 197, 94, 0.6);
+  transition: all 0.3s ease;
+}
+
+.military-button:hover {
+  background: linear-gradient(
+    135deg,
+    rgba(34, 197, 94, 0.5) 0%,
+    rgba(22, 163, 74, 0.5) 100%
+  );
+  box-shadow: 0 0 15px rgba(34, 197, 94, 0.6);
+  transform: translateY(-1px);
+}
+
+.military-button:active {
+  transform: translateY(0);
+}
+
+/* Статус индикаторы */
+.status-active {
+  color: #22c55e;
+  animation: blink 2s ease-in-out infinite;
+}
+
+.status-inactive {
+  color: #ef4444;
+}
+
+/* Монospace шрифт для технических данных */
+.tech-font {
+  font-family: "Courier New", Courier, monospace;
+  letter-spacing: 0.5px;
+}
+
+/* Скролл в военном стиле */
+.military-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+
+.military-scroll::-webkit-scrollbar-track {
+  background: rgba(17, 24, 39, 0.5);
+}
+
+.military-scroll::-webkit-scrollbar-thumb {
+  background: rgba(34, 197, 94, 0.5);
+  border-radius: 4px;
+}
+
+.military-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(34, 197, 94, 0.7);
+}
+
+/* Сетка для фона */
+.military-grid {
+  background-image: linear-gradient(
+      rgba(34, 197, 94, 0.05) 1px,
+      transparent 1px
+    ),
+    linear-gradient(90deg, rgba(34, 197, 94, 0.05) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+/* Эффект сканирования радара */
+.radar-effect {
+  position: relative;
+  overflow: hidden;
+}
+
+.radar-effect::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(34, 197, 94, 0.8),
+    transparent
+  );
+  transform-origin: 0% 50%;
+  animation: radar-sweep 4s linear infinite;
+}
+
+/* Таблица в военном стиле */
+.military-table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.military-table th {
+  background: rgba(34, 197, 94, 0.2);
+  border-bottom: 2px solid rgba(34, 197, 94, 0.5);
+  padding: 8px;
+  text-align: left;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 1px;
+}
+
+.military-table td {
+  border-bottom: 1px solid rgba(34, 197, 94, 0.2);
+  padding: 8px;
+}
+
+.military-table tr:hover {
+  background: rgba(34, 197, 94, 0.1);
+}
+
+/* Значки уведомлений */
+.notification-badge {
+  background: #ef4444;
+  animation: pulse-glow 2s ease-in-out infinite;
+}
