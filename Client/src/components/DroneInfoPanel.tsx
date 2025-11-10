@@ -336,15 +336,23 @@ export const DroneInfoPanel: React.FC<DroneInfoPanelProps> = ({
       )}
 
       {/* История полётов */}
-      <div className="p-4 max-h-64 overflow-y-auto military-scroll border-t border-green-500/20">
+      <div
+        className="p-4 overflow-y-auto military-scroll border-t border-green-500/20"
+        style={{ minHeight: "256px", maxHeight: "256px" }}
+      >
         <h4 className="text-xs font-semibold text-gray-400 mb-3 uppercase">
           История полётов (последние 20)
         </h4>
 
         {loading ? (
-          <div className="text-center py-4 text-gray-500">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-400 mx-auto"></div>
-            <p className="mt-2 text-sm">Загрузка...</p>
+          <div
+            className="flex items-center justify-center"
+            style={{ height: "200px" }}
+          >
+            <div className="text-center text-gray-500">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-400 mx-auto"></div>
+              <p className="mt-2 text-sm">Загрузка...</p>
+            </div>
           </div>
         ) : history.length > 0 ? (
           <div className="space-y-2">

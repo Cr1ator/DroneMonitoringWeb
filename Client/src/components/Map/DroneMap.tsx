@@ -251,7 +251,7 @@ export const DroneMap: React.FC = () => {
     const trajectoryLayer = new VectorLayer({
       source: trajectorySource,
       style: createTrajectoryStyle,
-      zIndex: 60,
+      zIndex: 80, // ✅ ИСПРАВЛЕНО: Увеличен z-index для лучшей видимости
     });
     trajectoryLayerRef.current = trajectoryLayer;
 
@@ -597,11 +597,21 @@ export const DroneMap: React.FC = () => {
     const source = trajectoryLayerRef.current.getSource();
     if (!source) return;
 
-    source.clear();
+    // ✅ ИСПРАВЛЕНО: Удаляем только траекторию этого дрона, а не все
+    const existingFeatures = source.getFeatures();
+    existingFeatures.forEach((feature) => {
+      if (feature.get("droneId") === droneId) {
+        source.removeFeature(feature);
+      }
+    });
 
-    if (points.length < 2) return;
+    if (points.length < 2) {
+      console.log(`⚠️ Not enough points for trajectory (${points.length})`);
+      return;
+    }
 
-    const coords = points.map((p) => fromLonLat([p.longitude, p.latitude]));
+    // ✅ ИСПРАВЛЕНО: Используем lon/lat вместо longitude/latitude (как приходит с бэка)
+    const coords = points.map((p) => fromLonLat([p.lon, p.lat]));
     const line = new LineString(coords);
     const feature = new Feature({
       geometry: line,
@@ -610,7 +620,9 @@ export const DroneMap: React.FC = () => {
     });
 
     source.addFeature(feature);
-    console.log(`✅ Displayed trajectory with ${points.length} points`);
+    console.log(
+      `✅ Displayed trajectory for drone ${droneId} with ${points.length} points`
+    );
   }, []);
 
   const clearAllTrajectories = useCallback(() => {
@@ -872,10 +884,11 @@ function createZoneStyle(feature: FeatureLike): Style {
 }
 
 function createTrajectoryStyle(feature: FeatureLike): Style {
+  // ✅ ИСПРАВЛЕНО: Более заметная траектория с эффектом свечения
   return new Style({
     stroke: new Stroke({
-      color: "rgba(251, 191, 36, 0.8)",
-      width: 3,
+      color: "rgba(251, 191, 36, 0.9)", // Увеличена непрозрачность
+      width: 5, // Увеличена ширина
       lineCap: "round",
       lineJoin: "round",
     }),
