@@ -25,6 +25,9 @@ public class DroneSimulatorService : BackgroundService
         public string Status { get; set; } = "Active";
         public double TargetLatitude { get; set; }
         public double TargetLongitude { get; set; }
+        public List<(double lat, double lon)> Route { get; set; } = new();
+        public int CurrentWaypointIndex { get; set; } = 0;
+        public int RouteType { get; set; } = 0;
     }
 
     public DroneSimulatorService(
@@ -39,9 +42,8 @@ public class DroneSimulatorService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _logger.LogInformation("🚁 Drone Simulator Service started");
+        _logger.LogInformation("🚁 Drone Simulator Service started with enhanced routes");
 
-        // Инициализация состояний дронов
         await InitializeDroneStates();
 
         while (!stoppingToken.IsCancellationRequested)
@@ -49,12 +51,12 @@ public class DroneSimulatorService : BackgroundService
             try
             {
                 await SimulateAndBroadcast();
-                await Task.Delay(1000, stoppingToken); // Обновление каждую секунду
+                await Task.Delay(1000, stoppingToken);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error in drone simulation");
-                await Task.Delay(5000, stoppingToken); // Пауза при ошибке
+                await Task.Delay(5000, stoppingToken);
             }
         }
     }
@@ -68,24 +70,84 @@ public class DroneSimulatorService : BackgroundService
             .Include(d => d.TelemetryData.OrderByDescending(t => t.Timestamp).Take(1))
             .ToListAsync();
 
+        double centerLat = 53.9006;
+        double centerLon = 27.5615;
+
         foreach (var drone in drones)
         {
             var lastTelemetry = drone.TelemetryData.FirstOrDefault();
-            
-            _droneStates[drone.Id] = new DroneState
+            var routeType = drone.Id % 3;
+
+            var state = new DroneState
             {
-                Latitude = lastTelemetry?.Position?.Y ?? 53.9006 + _random.NextDouble() * 0.02 - 0.01,
-                Longitude = lastTelemetry?.Position?.X ?? 27.5615 + _random.NextDouble() * 0.02 - 0.01,
+                Latitude = lastTelemetry?.Position?.Y ?? centerLat + _random.NextDouble() * 0.03 - 0.015,
+                Longitude = lastTelemetry?.Position?.X ?? centerLon + _random.NextDouble() * 0.03 - 0.015,
                 Altitude = lastTelemetry?.Altitude ?? 100 + _random.Next(50, 200),
-                Speed = lastTelemetry?.Speed ?? 10 + _random.NextDouble() * 20,
+                Speed = lastTelemetry?.Speed ?? 10 + _random.NextDouble() * 15,
                 Heading = lastTelemetry?.Heading ?? _random.Next(0, 360),
                 Status = drone.Status,
-                TargetLatitude = 53.9006 + _random.NextDouble() * 0.05 - 0.025,
-                TargetLongitude = 27.5615 + _random.NextDouble() * 0.05 - 0.025
+                RouteType = routeType
             };
+
+            state.Route = GenerateRoute(centerLat, centerLon, routeType, drone.Id);
+            state.TargetLatitude = state.Route[0].lat;
+            state.TargetLongitude = state.Route[0].lon;
+
+            _droneStates[drone.Id] = state;
         }
 
-        _logger.LogInformation("Initialized {Count} drone states", _droneStates.Count);
+        _logger.LogInformation("Initialized {Count} drones with diverse routes", _droneStates.Count);
+    }
+
+    private List<(double lat, double lon)> GenerateRoute(double centerLat, double centerLon, int routeType, int droneId)
+    {
+        var route = new List<(double lat, double lon)>();
+
+        switch (routeType)
+        {
+            case 0: // Patrol
+                {
+                    double size = 0.02 + _random.NextDouble() * 0.02;
+                    double offsetLat = (_random.NextDouble() - 0.5) * 0.02;
+                    double offsetLon = (_random.NextDouble() - 0.5) * 0.02;
+                    
+                    route.Add((centerLat + offsetLat, centerLon + offsetLon));
+                    route.Add((centerLat + offsetLat + size, centerLon + offsetLon));
+                    route.Add((centerLat + offsetLat + size, centerLon + offsetLon + size));
+                    route.Add((centerLat + offsetLat, centerLon + offsetLon + size));
+                    break;
+                }
+            case 1: // Crossing
+                {
+                    double range = 0.04;
+                    for (int i = 0; i < 6; i++)
+                    {
+                        double angle = (i * 60 + _random.Next(-15, 15)) * Math.PI / 180;
+                        double distance = 0.015 + _random.NextDouble() * range;
+                        route.Add((
+                            centerLat + Math.Sin(angle) * distance,
+                            centerLon + Math.Cos(angle) * distance
+                        ));
+                    }
+                    break;
+                }
+            case 2: // Circular
+                {
+                    double radius = 0.02 + _random.NextDouble() * 0.015;
+                    int points = 8;
+                    for (int i = 0; i < points; i++)
+                    {
+                        double angle = (i * 360.0 / points) * Math.PI / 180;
+                        route.Add((
+                            centerLat + Math.Sin(angle) * radius,
+                            centerLon + Math.Cos(angle) * radius
+                        ));
+                    }
+                    break;
+                }
+        }
+
+        return route;
     }
 
     private async Task SimulateAndBroadcast()
@@ -101,13 +163,11 @@ public class DroneSimulatorService : BackgroundService
             var droneId = kvp.Key;
             var state = kvp.Value;
 
-            // Симуляция движения только для активных дронов
             if (state.Status == "Active")
             {
                 SimulateDroneMovement(state);
             }
 
-            // Создаём запись телеметрии
             var telemetry = new Telemetry
             {
                 DroneId = droneId,
@@ -120,7 +180,6 @@ public class DroneSimulatorService : BackgroundService
 
             telemetryRecords.Add(telemetry);
 
-            // Подготавливаем данные для отправки клиентам
             var update = new
             {
                 id = droneId,
@@ -136,12 +195,10 @@ public class DroneSimulatorService : BackgroundService
             updates.Add(update);
         }
 
-        // Сохраняем телеметрию в БД (каждые 10 секунд для оптимизации)
         if (DateTime.UtcNow.Second % 10 == 0)
         {
             context.Telemetry.AddRange(telemetryRecords);
             
-            // ✅ ИСПРАВЛЕНО #5: Обновляем статус дронов в БД
             foreach (var kvp in _droneStates)
             {
                 var drone = await context.Drones.FindAsync(kvp.Key);
@@ -153,51 +210,49 @@ public class DroneSimulatorService : BackgroundService
             }
             
             await context.SaveChangesAsync();
-            
-            // ✅ ИСПРАВЛЕНО #5: Отправляем обновлённую статистику
             await SendStatistics(context);
         }
 
-        // Отправляем обновления через SignalR
         await _hubContext.Clients.All.SendAsync("DronesUpdated", updates);
-
-        // Проверяем дроны в зонах покрытия
         await CheckDronesInZones(context, updates);
     }
 
     private void SimulateDroneMovement(DroneState state)
     {
-        // Движение к целевой точке
-        var deltaLat = state.TargetLatitude - state.Latitude;
-        var deltaLon = state.TargetLongitude - state.Longitude;
+        if (state.Route.Count == 0) return;
+
+        var target = state.Route[state.CurrentWaypointIndex];
+        var deltaLat = target.lat - state.Latitude;
+        var deltaLon = target.lon - state.Longitude;
         var distance = Math.Sqrt(deltaLat * deltaLat + deltaLon * deltaLon);
 
-        if (distance < 0.001) // Достигли цели, выбираем новую
+        if (distance < 0.0005)
         {
-            state.TargetLatitude = 53.9006 + _random.NextDouble() * 0.05 - 0.025;
-            state.TargetLongitude = 27.5615 + _random.NextDouble() * 0.05 - 0.025;
+            state.CurrentWaypointIndex = (state.CurrentWaypointIndex + 1) % state.Route.Count;
+            target = state.Route[state.CurrentWaypointIndex];
+            deltaLat = target.lat - state.Latitude;
+            deltaLon = target.lon - state.Longitude;
+            distance = Math.Sqrt(deltaLat * deltaLat + deltaLon * deltaLon);
         }
-        else
+
+        var moveSpeed = 0.0001 + _random.NextDouble() * 0.00005;
+        
+        if (distance > 0)
         {
-            // Двигаемся к цели
-            var moveSpeed = 0.0001; // Скорость движения
             state.Latitude += (deltaLat / distance) * moveSpeed;
             state.Longitude += (deltaLon / distance) * moveSpeed;
             
-            // Обновляем направление
             state.Heading = Math.Atan2(deltaLon, deltaLat) * 180 / Math.PI;
             if (state.Heading < 0) state.Heading += 360;
         }
 
-        // Случайные изменения высоты и скорости
         state.Altitude = Math.Max(50, Math.Min(500, state.Altitude + _random.NextDouble() * 10 - 5));
-        state.Speed = Math.Max(5, Math.Min(30, state.Speed + _random.NextDouble() * 4 - 2));
+        state.Speed = Math.Max(8, Math.Min(25, state.Speed + _random.NextDouble() * 3 - 1.5));
 
-        // ✅ ИСПРАВЛЕНО #5: Редко меняем статус (1% шанс каждую итерацию)
-        if (_random.Next(100) == 0)
+        if (_random.Next(1000) == 0)
         {
             state.Status = state.Status == "Active" ? "Inactive" : "Active";
-            _logger.LogInformation("Drone status changed: {Status}", state.Status);
+            _logger.LogInformation("Drone status changed to: {Status}", state.Status);
         }
     }
 
@@ -228,7 +283,6 @@ public class DroneSimulatorService : BackgroundService
         }
     }
 
-    // ✅ ИСПРАВЛЕНО #5: Метод для отправки точной статистики
     private async Task SendStatistics(ApplicationDbContext context)
     {
         var totalDrones = await context.Drones.CountAsync();
@@ -249,6 +303,5 @@ public class DroneSimulatorService : BackgroundService
         };
 
         await _hubContext.Clients.All.SendAsync("DroneStatistics", stats);
-        _logger.LogInformation("Statistics sent: Active={Active}, Inactive={Inactive}", activeDrones, inactiveDrones);
     }
 }

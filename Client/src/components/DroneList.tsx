@@ -1,4 +1,7 @@
 import React, { useState } from "react";
+import { TbDrone } from "react-icons/tb";
+import { MdGpsFixed } from "react-icons/md";
+import { IoMdRadio } from "react-icons/io";
 import type { Drone } from "../types/drone";
 
 interface DroneListProps {
@@ -45,22 +48,11 @@ export const DroneList: React.FC<DroneListProps> = ({
 
   return (
     <div className="military-panel rounded-lg overflow-hidden flex flex-col h-full">
-      {/* Заголовок */}
+      {/* Заголовок - ТОЛЬКО ЗАМЕНИЛИ ИКОНКУ */}
       <div className="military-header px-4 py-3">
         <div className="flex items-center justify-between">
           <h2 className="text-green-400 font-bold flex items-center text-sm">
-            <svg
-              className="w-5 h-5 mr-2"
-              fill="currentColor"
-              viewBox="0 0 20 20"
-            >
-              <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
-              <path
-                fillRule="evenodd"
-                d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z"
-                clipRule="evenodd"
-              />
-            </svg>
+            <TbDrone className="w-5 h-5 mr-2" />
             АКТИВНЫЕ ДРОНЫ
           </h2>
           <div className="tech-font text-green-400 text-xs">
@@ -100,19 +92,7 @@ export const DroneList: React.FC<DroneListProps> = ({
       <div className="flex-1 overflow-y-auto military-scroll">
         {filteredDrones.length === 0 ? (
           <div className="p-4 text-center text-gray-500">
-            <svg
-              className="w-12 h-12 mx-auto mb-2 opacity-50"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"
-              />
-            </svg>
+            <TbDrone className="w-12 h-12 mx-auto mb-2 opacity-50" />
             <p className="text-sm">Дроны не обнаружены</p>
           </div>
         ) : (
@@ -130,10 +110,9 @@ export const DroneList: React.FC<DroneListProps> = ({
                   }
                 `}
               >
-                {/* Заголовок дрона */}
+                {/* Заголовок дрона - ТОЛЬКО ЗАМЕНИЛИ ИКОНКУ */}
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center space-x-2">
-                    {/* Иконка дрона */}
                     <div
                       className={`
                       w-8 h-8 rounded-full flex items-center justify-center
@@ -144,13 +123,7 @@ export const DroneList: React.FC<DroneListProps> = ({
                       }
                     `}
                     >
-                      <svg
-                        className="w-5 h-5"
-                        fill="currentColor"
-                        viewBox="0 0 20 20"
-                      >
-                        <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
-                      </svg>
+                      <TbDrone className="w-5 h-5" />
                     </div>
 
                     {/* Название и статус */}
@@ -173,7 +146,7 @@ export const DroneList: React.FC<DroneListProps> = ({
                     </div>
                   </div>
 
-                  {/* Кнопка отслеживания */}
+                  {/* Кнопка отслеживания - ЗАМЕНИЛИ ИКОНКУ */}
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -182,25 +155,7 @@ export const DroneList: React.FC<DroneListProps> = ({
                     className="military-button p-1.5 rounded text-green-400 hover:text-white"
                     title="Отследить на карте"
                   >
-                    <svg
-                      className="w-4 h-4"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
-                      />
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
-                      />
-                    </svg>
+                    <MdGpsFixed className="w-4 h-4" />
                   </button>
                 </div>
 
@@ -226,10 +181,11 @@ export const DroneList: React.FC<DroneListProps> = ({
                   </div>
                 </div>
 
-                {/* Дополнительная информация */}
+                {/* Дополнительная информация - ЗАМЕНИЛИ ИКОНКУ */}
                 <div className="mt-2 pt-2 border-t border-green-500/10">
                   <div className="flex items-center justify-between text-xs">
-                    <div className="text-gray-500">
+                    <div className="text-gray-500 flex items-center">
+                      <IoMdRadio className="w-3 h-3 mr-1" />
                       <span className="text-gray-400">Частота:</span>
                       <span className="ml-1 text-green-400 tech-font">
                         {drone.frequency}

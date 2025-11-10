@@ -3,7 +3,7 @@ export interface Drone {
   id: number;
   name: string;
   frequency: string;
-  status: 'Active' | 'Inactive';
+  status: "Active" | "Inactive";
   lastSeen: string;
   latitude: number;
   longitude: number;
@@ -94,17 +94,31 @@ export interface DroneHistory {
 
 // Настройки отображения карты
 export interface MapSettings {
-  mapType: 'osm' | 'satellite';
+  mapType: "osm" | "satellite";
   showZones: boolean;
   showTrajectories: boolean;
 }
 
 // События карты
 export interface MapEvent {
-  type: 'centerMap' | 'resetZoom';
+  type: "centerMap" | "resetZoom";
   detail: {
     lon?: number;
     lat?: number;
     zoom?: number;
   };
+}
+
+// Система тревоги
+export interface AlarmState {
+  isActive: boolean;
+  isMuted: boolean;
+  triggeredDrones: number[];
+  lastTriggeredTime: Date | null;
+}
+
+// Расширенная зона с подсчетом дронов
+export interface ZoneWithDrones extends CoverageZone {
+  dronesInZone: number;
+  droneIds: number[];
 }
