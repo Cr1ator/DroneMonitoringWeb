@@ -204,19 +204,6 @@ export const DroneList: React.FC<DroneListProps> = ({
           </div>
         )}
       </div>
-
-      {/* Подвал */}
-      <div className="px-4 py-2 bg-gray-900/50 border-t border-green-500/20">
-        <div className="flex items-center justify-between text-xs text-gray-500">
-          <div className="flex items-center">
-            <div className="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></div>
-            <span>Real-time tracking</span>
-          </div>
-          <div className="tech-font text-green-400">
-            {new Date().toLocaleTimeString("ru-RU")}
-          </div>
-        </div>
-      </div>
     </div>
   );
 };

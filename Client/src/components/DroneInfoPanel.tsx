@@ -185,7 +185,7 @@ export const DroneInfoPanel: React.FC<DroneInfoPanelProps> = ({
   };
 
   return (
-    <div className="absolute bottom-4 right-4 w-96 military-panel rounded-lg shadow-2xl overflow-hidden animate-slideInRight">
+    <div className="absolute bottom-4 right-4 w-96 military-panel military-scroll rounded-lg shadow-2xl overflow-y-auto animate-slideInRight max-h-[calc(100vh-6rem)]">
       {/* Заголовок */}
       <div
         className={`px-4 py-3 ${

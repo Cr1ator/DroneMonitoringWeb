@@ -40,7 +40,6 @@ public class DroneSimulatorService : BackgroundService
         _logger = logger;
     }
 
-    // ... (Методы ExecuteAsync, InitializeDroneStates, ActivateDrone, GenerateRoute, SimulateAndBroadcast, ManageActiveDrones, SimulateDroneMovement остаются без изменений)
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         _logger.LogInformation("🚁 Drone Simulator Service started with DYNAMIC and DIVERSE routes");
@@ -268,7 +267,8 @@ public class DroneSimulatorService : BackgroundService
         }
 
         await _hubContext.Clients.All.SendAsync("DronesUpdated", updates);
-        await CheckDronesInZones(context, updates.Where(u => ((dynamic)u).status == "Active").ToList());
+
+        await BroadcastZoneActivity(context);
     }
 
     private void ManageActiveDrones()
@@ -320,44 +320,46 @@ public class DroneSimulatorService : BackgroundService
         }
     }
 
-    // --- ИЗМЕНЕНО: Логика проверки вхождения в зону ---
-    private async Task CheckDronesInZones(ApplicationDbContext context, List<object> updates)
+    // Метод для проверки зон
+    private async Task BroadcastZoneActivity(ApplicationDbContext context)
     {
         var zones = await context.CoverageZones.ToListAsync();
         if (!zones.Any()) return;
 
+        // Получаем только активные дроны для проверки
+        var activeDrones = _droneStates
+            .Where(kvp => kvp.Value.Status == "Active")
+            .Select(kvp => new {
+                Point = new Point(kvp.Value.Longitude, kvp.Value.Latitude) { SRID = 4326 }
+            })
+            .ToList();
+
+        if (!activeDrones.Any())
+        {
+            // Если нет активных дронов, отправляем пустой список
+            await _hubContext.Clients.All.SendAsync("ActiveZonesUpdated", new List<int>());
+            return;
+        }
+
+        // Используем HashSet для быстрой и уникальной вставки ID активных зон
+        var activeZoneIds = new HashSet<int>();
+
         foreach (var zone in zones)
         {
-            // Получаем центроид зоны для проверки
             var zoneCenter = zone.Zone.Centroid;
+            double radiusInDegrees = zone.RadiusMeters / 111320.0;
 
-            var dronesInZone = updates.Where(u =>
+            // Проверяем, есть ли ХОТЯ БЫ ОДИН дрон в этой зоне
+            bool isZoneActive = activeDrones.Any(drone => zoneCenter.IsWithinDistance(drone.Point, radiusInDegrees));
+
+            if (isZoneActive)
             {
-                dynamic d = u;
-                var dronePoint = new Point(d.longitude, d.latitude) { SRID = 4326 };
-
-                // --- КЛЮЧЕВОЕ ИЗМЕНЕНИЕ ---
-                // Вместо проверки Contains(dronePoint) мы теперь проверяем расстояние от центроида.
-                // Это полностью соответствует логике отрисовки на фронтенде.
-                // IsWithinDistance ожидает расстояние в градусах, поэтому нам нужно его конвертировать.
-                // 1 градус широты ~ 111 км.
-                double radiusInDegrees = zone.RadiusMeters / 111320.0;
-                return zoneCenter.IsWithinDistance(dronePoint, radiusInDegrees);
-
-            }).ToList();
-
-            if (dronesInZone.Any())
-            {
-                // Отправка уведомлений остается прежней
-                await _hubContext.Clients.Group($"zone_{zone.Id}")
-                    .SendAsync("DronesInZoneUpdated", new
-                    {
-                        zoneId = zone.Id,
-                        zoneName = zone.Name,
-                        drones = dronesInZone
-                    });
+                activeZoneIds.Add(zone.Id);
             }
         }
+
+        // Отправляем массив ID активных зон всем клиентам
+        await _hubContext.Clients.All.SendAsync("ActiveZonesUpdated", activeZoneIds);
     }
     
     private async Task SendStatistics(ApplicationDbContext context)

@@ -4,10 +4,10 @@ import { Tile as TileLayer, Vector as VectorLayer } from "ol/layer";
 import { XYZ } from "ol/source";
 import { Vector as VectorSource } from "ol/source";
 import { Feature } from "ol";
-import { Point, LineString, Polygon } from "ol/geom"; // ИЗМЕНЕНО: Убеждаемся, что Polygon импортирован
+import { Point, LineString, Polygon } from "ol/geom";
 import { Style, Stroke, Fill, Text, Circle as CircleStyle } from "ol/style";
 import { fromLonLat } from "ol/proj";
-import { getDistance, offset } from "ol/sphere"; // ИЗМЕНЕНО: Импортируем getDistance и НОВУЮ функцию offset
+import { getDistance, offset } from "ol/sphere";
 import { defaults as defaultControls } from "ol/control";
 import * as signalR from "@microsoft/signalr";
 import { TbDrone } from "react-icons/tb";
@@ -27,7 +27,7 @@ import { MapControls } from "./../MapControls";
 import { DroneList } from "../DroneList";
 import { DroneHistoryPanel } from "../DroneHistoryPanel";
 
-// Компонент Tooltip для дронов
+// Компонент Tooltip для дронов (без изменений)
 const DroneTooltip: React.FC<{
   drone: Drone;
   x: number;
@@ -82,12 +82,12 @@ const DroneTooltip: React.FC<{
   );
 };
 
-// Простая панель тревоги БЕЗ звука
+// Панель тревоги теперь принимает количество активных зон
 const AlarmPanel: React.FC<{
-  dronesInZones: number;
+  activeZonesCount: number;
   onDismiss: () => void;
-}> = ({ dronesInZones, onDismiss }) => {
-  if (dronesInZones === 0) return null;
+}> = ({ activeZonesCount, onDismiss }) => {
+  if (activeZonesCount === 0) return null;
 
   return (
     <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-50">
@@ -97,7 +97,7 @@ const AlarmPanel: React.FC<{
           <div>
             <div className="text-red-200 font-bold text-lg">ТРЕВОГА!</div>
             <div className="text-red-300 text-sm">
-              Обнаружено {dronesInZones} дрон(ов) в зоне
+              Дроны обнаружены в {activeZonesCount} зон(е/ах)
             </div>
           </div>
           <button
@@ -146,8 +146,8 @@ export const DroneMap: React.FC = () => {
     y: number;
   } | null>(null);
 
-  const [showAlarm, setShowAlarm] = useState(false);
-  const [dronesInZonesCount, setDronesInZonesCount] = useState(0);
+  const [activeZoneIds, setActiveZoneIds] = useState<Set<number>>(new Set());
+  const [isAlarmDismissed, setIsAlarmDismissed] = useState(false);
 
   useEffect(() => {
     dronesRef.current = drones;
@@ -165,7 +165,6 @@ export const DroneMap: React.FC = () => {
           [point.lon, point.lat],
           [zone.centerLon, zone.centerLat]
         );
-
         if (distance <= zone.radiusMeters) {
           return true;
         }
@@ -186,36 +185,28 @@ export const DroneMap: React.FC = () => {
     const activeDronesInZones = drones.filter(
       (d) => d.status === "Active" && isDroneInAnyZone(d)
     );
-    const count = activeDronesInZones.length;
-    setDronesInZonesCount(count);
 
-    if (count > 0) {
-      setShowAlarm(true);
-      activeDronesInZones.forEach((drone) => {
-        if (!dronesInZonesRef.current.has(drone.id)) {
-          console.log(
-            `🛸 Новый дрон в зоне: ${drone.name}, загружаем траекторию`
-          );
-          dronesInZonesRef.current.add(drone.id);
-          if (
-            connectionRef.current?.state ===
-            signalR.HubConnectionState.Connected
-          ) {
-            connectionRef.current.invoke("GetDroneTrajectory", drone.id, 1);
-          }
+    activeDronesInZones.forEach((drone) => {
+      if (!dronesInZonesRef.current.has(drone.id)) {
+        console.log(
+          `🛸 Новый дрон в зоне: ${drone.name}, загружаем траекторию`
+        );
+        dronesInZonesRef.current.add(drone.id);
+        if (
+          connectionRef.current?.state === signalR.HubConnectionState.Connected
+        ) {
+          connectionRef.current.invoke("GetDroneTrajectory", drone.id, 1);
         }
-      });
+      }
+    });
 
-      const currentIds = new Set(activeDronesInZones.map((d) => d.id));
-      dronesInZonesRef.current.forEach((id) => {
-        if (!currentIds.has(id)) {
-          console.log(`🛸 Дрон ${id} вышел из зоны`);
-          dronesInZonesRef.current.delete(id);
-        }
-      });
-    } else {
-      dronesInZonesRef.current.clear();
-    }
+    const currentIdsInZone = new Set(activeDronesInZones.map((d) => d.id));
+    dronesInZonesRef.current.forEach((id) => {
+      if (!currentIdsInZone.has(id)) {
+        console.log(`🛸 Дрон ${id} вышел из зоны`);
+        dronesInZonesRef.current.delete(id);
+      }
+    });
   }, [drones, isDroneInAnyZone]);
 
   useEffect(() => {
@@ -234,7 +225,7 @@ export const DroneMap: React.FC = () => {
     const zoneSource = new VectorSource();
     const zoneLayer = new VectorLayer({
       source: zoneSource,
-      style: createZoneStyle,
+      style: (feature) => createZoneStyle(feature, false),
       zIndex: 50,
       opacity: 0.7,
     });
@@ -297,15 +288,10 @@ export const DroneMap: React.FC = () => {
 
       if (feature && feature.get("type") === "drone") {
         map.getTargetElement().style.cursor = "pointer";
-
         const droneId = feature.get("droneId");
         const drone = dronesRef.current.find((d) => d.id === droneId);
         if (drone) {
-          setTooltip({
-            drone,
-            x: event.pixel[0],
-            y: event.pixel[1],
-          });
+          setTooltip({ drone, x: event.pixel[0], y: event.pixel[1] });
         }
       } else {
         map.getTargetElement().style.cursor = "";
@@ -349,6 +335,25 @@ export const DroneMap: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    if (!zoneLayerRef.current) return;
+
+    const newZoneStyleFunction = (feature: FeatureLike) => {
+      const zoneId = feature.get("zoneId") as number;
+      const isAlarm = activeZoneIds.has(zoneId);
+      return createZoneStyle(feature, isAlarm);
+    };
+
+    zoneLayerRef.current.setStyle(newZoneStyleFunction);
+
+    // ✅ КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ: Принудительно перерисовываем слой
+    zoneLayerRef.current.getSource()?.changed();
+
+    if (activeZoneIds.size > 0) {
+      setIsAlarmDismissed(false);
+    }
+  }, [activeZoneIds]);
+
+  useEffect(() => {
     const connection = new signalR.HubConnectionBuilder()
       .withUrl("http://localhost:5216/droneHub")
       .withAutomaticReconnect([0, 2000, 5000, 10000])
@@ -380,8 +385,6 @@ export const DroneMap: React.FC = () => {
     });
 
     connection.on("DronesUpdated", (updates: any[]) => {
-      console.log("🔄 Drones updated:", updates);
-
       setDrones((prevDrones) => {
         const updatedDrones = prevDrones.map((drone) => {
           const update = updates.find((u) => u.id === drone.id);
@@ -401,28 +404,6 @@ export const DroneMap: React.FC = () => {
         });
         return updatedDrones;
       });
-
-      setSelectedDrone((prevSelected) => {
-        if (
-          prevSelected &&
-          connectionRef.current?.state === signalR.HubConnectionState.Connected
-        ) {
-          if (updates.some((u) => u.id === prevSelected.id)) {
-            setTimeout(() => {
-              connectionRef.current?.invoke(
-                "GetDroneTrajectory",
-                prevSelected.id,
-                1
-              );
-              console.log(
-                "🔄 Auto-reloading trajectory for selected drone:",
-                prevSelected.id
-              );
-            }, 200);
-          }
-        }
-        return prevSelected;
-      });
     });
 
     connection.on("CoverageZones", (zonesData: any[]) => {
@@ -432,7 +413,6 @@ export const DroneMap: React.FC = () => {
     });
 
     connection.on("DroneStatistics", (statsData: any) => {
-      console.log("📊 Received statistics:", statsData);
       setStats(statsData);
     });
 
@@ -449,6 +429,10 @@ export const DroneMap: React.FC = () => {
         }
         return prevSelected;
       });
+    });
+
+    connection.on("ActiveZonesUpdated", (zoneIds: number[]) => {
+      setActiveZoneIds(new Set(zoneIds));
     });
 
     connection.onreconnecting(() => {
@@ -495,15 +479,9 @@ export const DroneMap: React.FC = () => {
         const frequencyMatch =
           filters.frequencyFilter.length === 0 ||
           filters.frequencyFilter.includes(drone.frequency);
-
         const inZone = isDroneInAnyZone(drone);
-
         return statusMatch && frequencyMatch && inZone;
       });
-
-      console.log(
-        `✅ Displaying ${filteredDrones.length} filtered drones (that are in zones)`
-      );
 
       const existingFeatures = source.getFeatures();
       const existingIds = new Set(
@@ -528,7 +506,6 @@ export const DroneMap: React.FC = () => {
           geometry.setCoordinates(
             fromLonLat([drone.longitude, drone.latitude])
           );
-
           existingFeature.set("status", drone.status);
           existingFeature.set("altitude", drone.altitude);
           existingFeature.set("speed", drone.speed);
@@ -570,7 +547,7 @@ export const DroneMap: React.FC = () => {
         clearAllTrajectories();
         setSelectedDrone(null);
         console.log(
-          `🧹 Drone ${selectedDrone.name} is no longer visible (filtered out or left zone). Selection cleared.`
+          `🧹 Drone ${selectedDrone.name} is no longer visible. Selection cleared.`
         );
       }
     }
@@ -578,36 +555,26 @@ export const DroneMap: React.FC = () => {
 
   const updateZoneFeatures = useCallback((zonesData: CoverageZone[]) => {
     if (!zoneLayerRef.current) return;
-
     const source = zoneLayerRef.current.getSource();
     if (!source) return;
-
     source.clear();
-
     zonesData.forEach((zone) => {
       const centerLonLat = [zone.centerLon, zone.centerLat];
       const points = [];
-      // ИЗМЕНЕНО: Создаем 64 точки по окружности, используя геодезические расчеты
       for (let i = 0; i < 64; i++) {
         const angle = (i / 64) * 2 * Math.PI;
-        // offset() вычисляет новую координату на сфере на заданном расстоянии и под заданным углом
         const pointOnCircle = offset(centerLonLat, zone.radiusMeters, angle);
-        points.push(fromLonLat(pointOnCircle)); // Сразу конвертируем в проекцию карты
+        points.push(fromLonLat(pointOnCircle));
       }
-
-      // Создаем полигон из вычисленных точек
       const circlePolygon = new Polygon([points]);
-
       const feature = new Feature({
         geometry: circlePolygon,
         zoneId: zone.id,
         name: zone.name,
         type: "zone",
       });
-
       source.addFeature(feature);
     });
-
     console.log(
       `✅ Updated ${zonesData.length} coverage zones with geodesic polygons`
     );
@@ -616,24 +583,18 @@ export const DroneMap: React.FC = () => {
   const displayTrajectory = useCallback(
     (droneId: number, points: TrajectoryPoint[]) => {
       if (!trajectoryLayerRef.current) return;
-
       const source = trajectoryLayerRef.current.getSource();
       if (!source) return;
-
       source.clear();
-
       if (points.length < 2) {
         console.log(`⚠️ Not enough points for trajectory (${points.length})`);
         return;
       }
-
       const segments: { lon: number; lat: number }[][] = [];
       let currentSegment: { lon: number; lat: number }[] = [];
-
       for (let i = 0; i < points.length; i++) {
         const point = points[i];
         const pointIsInZone = isPointInAnyZone(point);
-
         if (pointIsInZone) {
           currentSegment.push(point);
         } else {
@@ -646,14 +607,12 @@ export const DroneMap: React.FC = () => {
       if (currentSegment.length > 1) {
         segments.push(currentSegment);
       }
-
       if (segments.length === 0) {
         console.log(
           `ℹ️ Trajectory for drone ${droneId} is entirely outside coverage zones.`
         );
         return;
       }
-
       segments.forEach((segment, index) => {
         const coords = segment.map((p) => fromLonLat([p.lon, p.lat]));
         const line = new LineString(coords);
@@ -665,7 +624,6 @@ export const DroneMap: React.FC = () => {
         });
         source.addFeature(feature);
       });
-
       console.log(
         `✅ Displayed ${segments.length} trajectory segments for drone ${droneId}`
       );
@@ -691,12 +649,9 @@ export const DroneMap: React.FC = () => {
   const toggleMapType = useCallback(() => {
     const newType = mapType === "osm" ? "satellite" : "osm";
     setMapType(newType);
-
     if (!mapInstanceRef.current) return;
-
     const layers = mapInstanceRef.current.getLayers();
     const baseLayer = layers.item(0) as TileLayer<XYZ>;
-
     if (newType === "satellite") {
       baseLayer.setSource(
         new XYZ({
@@ -727,12 +682,9 @@ export const DroneMap: React.FC = () => {
 
   const handleDroneSelect = (drone: Drone, centerAndZoom: boolean = false) => {
     console.log("🔍 Drone selected:", drone.name);
-
     if (selectedDrone?.id === drone.id) return;
-
     setSelectedDrone(drone);
     loadDroneTrajectory(drone.id);
-
     if (centerAndZoom && mapInstanceRef.current) {
       const view = mapInstanceRef.current.getView();
       view.animate({
@@ -753,19 +705,13 @@ export const DroneMap: React.FC = () => {
   const handleCenterMap = () => {
     if (!mapInstanceRef.current) return;
     const view = mapInstanceRef.current.getView();
-    view.animate({
-      center: fromLonLat([27.5615, 53.9006]),
-      duration: 500,
-    });
+    view.animate({ center: fromLonLat([27.5615, 53.9006]), duration: 500 });
   };
 
   const handleResetZoom = () => {
     if (!mapInstanceRef.current) return;
     const view = mapInstanceRef.current.getView();
-    view.animate({
-      zoom: 12,
-      duration: 500,
-    });
+    view.animate({ zoom: 12, duration: 500 });
   };
 
   return (
@@ -776,21 +722,17 @@ export const DroneMap: React.FC = () => {
         stats={stats}
         isConnected={isConnected}
       />
-
       <div className="flex-1 relative">
         <div ref={mapRef} className="w-full h-full" />
-
         {tooltip && (
           <DroneTooltip drone={tooltip.drone} x={tooltip.x} y={tooltip.y} />
         )}
-
-        {showAlarm && (
+        {!isAlarmDismissed && activeZoneIds.size > 0 && (
           <AlarmPanel
-            dronesInZones={dronesInZonesCount}
-            onDismiss={() => setShowAlarm(false)}
+            activeZonesCount={activeZoneIds.size}
+            onDismiss={() => setIsAlarmDismissed(true)}
           />
         )}
-
         <MapControls
           mapType={mapType}
           showZones={showZones}
@@ -801,7 +743,6 @@ export const DroneMap: React.FC = () => {
           onCenterMap={handleCenterMap}
           onResetZoom={handleResetZoom}
         />
-
         {selectedDrone && (
           <DroneInfoPanel
             drone={selectedDrone}
@@ -811,7 +752,6 @@ export const DroneMap: React.FC = () => {
             }}
           />
         )}
-
         <button
           onClick={() => setShowDroneList(!showDroneList)}
           className="absolute top-4 right-4 military-button p-3 rounded-lg text-green-400 hover:text-white z-10"
@@ -832,7 +772,6 @@ export const DroneMap: React.FC = () => {
           </svg>
         </button>
       </div>
-
       {showDroneList && (
         <div className="w-96 h-full">
           <DroneList
@@ -843,7 +782,6 @@ export const DroneMap: React.FC = () => {
           />
         </div>
       )}
-
       {showHistory && historyDroneId && (
         <DroneHistoryPanel
           droneId={historyDroneId}
@@ -866,17 +804,12 @@ function createDroneStyle(feature: FeatureLike): Style {
   const name = feature.get("name") as string;
   const altitude = feature.get("altitude") as number;
   const speed = feature.get("speed") as number;
-
   const color = status === "Active" ? "#22c55e" : "#ef4444";
-
   return new Style({
     image: new CircleStyle({
       radius: 10,
       fill: new Fill({ color: color }),
-      stroke: new Stroke({
-        color: "#ffffff",
-        width: 2,
-      }),
+      stroke: new Stroke({ color: "#ffffff", width: 2 }),
     }),
     text: new Text({
       text: `${name}\n${altitude?.toFixed(0) || 0}m\n${
@@ -885,40 +818,32 @@ function createDroneStyle(feature: FeatureLike): Style {
       offsetY: -25,
       font: "bold 11px 'Courier New', monospace",
       fill: new Fill({ color: color }),
-      stroke: new Stroke({
-        color: "#000000",
-        width: 4,
-      }),
-      backgroundFill: new Fill({
-        color: "rgba(0, 0, 0, 0.8)",
-      }),
+      stroke: new Stroke({ color: "#000000", width: 4 }),
+      backgroundFill: new Fill({ color: "rgba(0, 0, 0, 0.8)" }),
       padding: [4, 6, 4, 6],
     }),
   });
 }
 
-function createZoneStyle(feature: FeatureLike): Style {
+function createZoneStyle(
+  feature: FeatureLike,
+  isAlarm: boolean = false
+): Style {
   const name = feature.get("name") as string;
-
+  const baseColor = isAlarm ? "239, 68, 68" : "34, 197, 94";
+  const hexColor = isAlarm ? "#ef4444" : "#22c55e";
   return new Style({
-    fill: new Fill({
-      color: "rgba(34, 197, 94, 0.15)",
-    }),
+    fill: new Fill({ color: `rgba(${baseColor}, 0.2)` }),
     stroke: new Stroke({
-      color: "rgba(34, 197, 94, 0.9)",
-      width: 4,
+      color: `rgba(${baseColor}, 0.9)`,
+      width: isAlarm ? 5 : 4,
     }),
     text: new Text({
       text: name || "ЗОНА",
       font: "bold 16px 'Courier New', monospace",
-      fill: new Fill({ color: "#22c55e" }),
-      stroke: new Stroke({
-        color: "#000000",
-        width: 5,
-      }),
-      backgroundFill: new Fill({
-        color: "rgba(0, 0, 0, 0.9)",
-      }),
+      fill: new Fill({ color: hexColor }),
+      stroke: new Stroke({ color: "#000000", width: 5 }),
+      backgroundFill: new Fill({ color: "rgba(0, 0, 0, 0.9)" }),
       padding: [8, 12, 8, 12],
     }),
   });
