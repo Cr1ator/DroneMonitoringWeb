@@ -3,12 +3,15 @@ using Microsoft.EntityFrameworkCore;
 using DroneMonitoring.Server.Data;
 using DroneMonitoring.Server.Hubs;
 using NetTopologySuite.Geometries;
-using System.Text.Json;
 
 namespace DroneMonitoring.Server.Services;
 
 public class DroneSimulatorService : BackgroundService
 {
+    private const int MIN_ACTIVE_DRONES = 5;
+    private const int MAX_ACTIVE_DRONES = 10;
+    private const int DEACTIVATION_CHANCE_INVERSE = 1500;
+
     private readonly IServiceProvider _serviceProvider;
     private readonly IHubContext<DroneTrackingHub> _hubContext;
     private readonly ILogger<DroneSimulatorService> _logger;
@@ -22,12 +25,9 @@ public class DroneSimulatorService : BackgroundService
         public double Altitude { get; set; }
         public double Speed { get; set; }
         public double Heading { get; set; }
-        public string Status { get; set; } = "Active";
-        public double TargetLatitude { get; set; }
-        public double TargetLongitude { get; set; }
+        public string Status { get; set; } = "Inactive";
         public List<(double lat, double lon)> Route { get; set; } = new();
         public int CurrentWaypointIndex { get; set; } = 0;
-        public int RouteType { get; set; } = 0;
     }
 
     public DroneSimulatorService(
@@ -40,9 +40,10 @@ public class DroneSimulatorService : BackgroundService
         _logger = logger;
     }
 
+    // ... (Методы ExecuteAsync, InitializeDroneStates, ActivateDrone, GenerateRoute, SimulateAndBroadcast, ManageActiveDrones, SimulateDroneMovement остаются без изменений)
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _logger.LogInformation("🚁 Drone Simulator Service started with enhanced routes");
+        _logger.LogInformation("🚁 Drone Simulator Service started with DYNAMIC and DIVERSE routes");
 
         await InitializeDroneStates();
 
@@ -66,92 +67,145 @@ public class DroneSimulatorService : BackgroundService
         using var scope = _serviceProvider.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
-        var drones = await context.Drones
-            .Include(d => d.TelemetryData.OrderByDescending(t => t.Timestamp).Take(1))
-            .ToListAsync();
+        var drones = await context.Drones.ToListAsync();
+        
+        var shuffledDrones = drones.OrderBy(d => _random.Next()).ToList();
 
         double centerLat = 53.9006;
         double centerLon = 27.5615;
 
-        foreach (var drone in drones)
+        for (int i = 0; i < shuffledDrones.Count; i++)
         {
-            var lastTelemetry = drone.TelemetryData.FirstOrDefault();
-            var routeType = drone.Id % 3;
-
+            var drone = shuffledDrones[i];
             var state = new DroneState
             {
-                Latitude = lastTelemetry?.Position?.Y ?? centerLat + _random.NextDouble() * 0.03 - 0.015,
-                Longitude = lastTelemetry?.Position?.X ?? centerLon + _random.NextDouble() * 0.03 - 0.015,
-                Altitude = lastTelemetry?.Altitude ?? 100 + _random.Next(50, 200),
-                Speed = lastTelemetry?.Speed ?? 10 + _random.NextDouble() * 15,
-                Heading = lastTelemetry?.Heading ?? _random.Next(0, 360),
-                Status = drone.Status,
-                RouteType = routeType
+                Latitude = centerLat + (_random.NextDouble() - 0.5) * 0.1,
+                Longitude = centerLon + (_random.NextDouble() - 0.5) * 0.1,
+                Altitude = 100 + _random.Next(50, 200),
+                Speed = 10 + _random.NextDouble() * 15,
+                Heading = _random.Next(0, 360),
+                Status = "Inactive"
             };
 
-            state.Route = GenerateRoute(centerLat, centerLon, routeType, drone.Id);
-            state.TargetLatitude = state.Route[0].lat;
-            state.TargetLongitude = state.Route[0].lon;
+            if (i < MAX_ACTIVE_DRONES)
+            {
+                ActivateDrone(state, centerLat, centerLon);
+            }
 
             _droneStates[drone.Id] = state;
         }
 
-        _logger.LogInformation("Initialized {Count} drones with diverse routes", _droneStates.Count);
+        _logger.LogInformation("Initialized {TotalCount} drones, {ActiveCount} are now active.", _droneStates.Count, _droneStates.Values.Count(s => s.Status == "Active"));
+    }
+    
+    private void ActivateDrone(DroneState state, double centerLat, double centerLon)
+    {
+        state.Status = "Active";
+        state.Route = GenerateRoute(centerLat, centerLon);
+        state.CurrentWaypointIndex = 0;
+        
+        if (state.Route.Any())
+        {
+            state.Latitude = state.Route[0].lat;
+            state.Longitude = state.Route[0].lon;
+        }
     }
 
-    private List<(double lat, double lon)> GenerateRoute(double centerLat, double centerLon, int routeType, int droneId)
+    private List<(double lat, double lon)> GenerateRoute(double centerLat, double centerLon)
     {
         var route = new List<(double lat, double lon)>();
+        int routeType = _random.Next(0, 6);
+
+        double routeCenterLat = centerLat + (_random.NextDouble() - 0.5) * 0.05;
+        double routeCenterLon = centerLon + (_random.NextDouble() - 0.5) * 0.05;
 
         switch (routeType)
         {
-            case 0: // Patrol
+            case 0: // Патрулирование (прямоугольник)
                 {
-                    double size = 0.02 + _random.NextDouble() * 0.02;
-                    double offsetLat = (_random.NextDouble() - 0.5) * 0.02;
-                    double offsetLon = (_random.NextDouble() - 0.5) * 0.02;
-                    
-                    route.Add((centerLat + offsetLat, centerLon + offsetLon));
-                    route.Add((centerLat + offsetLat + size, centerLon + offsetLon));
-                    route.Add((centerLat + offsetLat + size, centerLon + offsetLon + size));
-                    route.Add((centerLat + offsetLat, centerLon + offsetLon + size));
+                    double width = 0.01 + _random.NextDouble() * 0.02;
+                    double height = 0.01 + _random.NextDouble() * 0.02;
+                    route.Add((routeCenterLat - height / 2, routeCenterLon - width / 2));
+                    route.Add((routeCenterLat + height / 2, routeCenterLon - width / 2));
+                    route.Add((routeCenterLat + height / 2, routeCenterLon + width / 2));
+                    route.Add((routeCenterLat - height / 2, routeCenterLon + width / 2));
                     break;
                 }
-            case 1: // Crossing
+            case 1: // Пересечение (случайные точки вокруг центра)
                 {
-                    double range = 0.04;
-                    for (int i = 0; i < 6; i++)
+                    int points = _random.Next(5, 9);
+                    for (int i = 0; i < points; i++)
                     {
-                        double angle = (i * 60 + _random.Next(-15, 15)) * Math.PI / 180;
-                        double distance = 0.015 + _random.NextDouble() * range;
-                        route.Add((
-                            centerLat + Math.Sin(angle) * distance,
-                            centerLon + Math.Cos(angle) * distance
-                        ));
+                        double angle = _random.NextDouble() * 2 * Math.PI;
+                        double distance = 0.01 + _random.NextDouble() * 0.03;
+                        route.Add((routeCenterLat + Math.Sin(angle) * distance, routeCenterLon + Math.Cos(angle) * distance));
                     }
                     break;
                 }
-            case 2: // Circular
+            case 2: // Круговой маршрут (по или против часовой стрелки)
                 {
-                    double radius = 0.02 + _random.NextDouble() * 0.015;
-                    int points = 8;
+                    double radius = 0.015 + _random.NextDouble() * 0.02;
+                    int points = 12;
+                    bool clockwise = _random.Next(2) == 0;
                     for (int i = 0; i < points; i++)
                     {
-                        double angle = (i * 360.0 / points) * Math.PI / 180;
-                        route.Add((
-                            centerLat + Math.Sin(angle) * radius,
-                            centerLon + Math.Cos(angle) * radius
-                        ));
+                        int step = clockwise ? i : points - 1 - i;
+                        double angle = (step * 360.0 / points) * Math.PI / 180;
+                        route.Add((routeCenterLat + Math.Sin(angle) * radius, routeCenterLon + Math.Cos(angle) * radius));
+                    }
+                    break;
+                }
+            case 3: // НОВЫЙ: Восьмерка
+                {
+                    double radius = 0.01 + _random.NextDouble() * 0.01;
+                    int pointsPerCircle = 8;
+                    for (int i = 0; i <= pointsPerCircle; i++)
+                    {
+                        double angle = (i * 360.0 / pointsPerCircle) * Math.PI / 180;
+                        route.Add((routeCenterLat + Math.Sin(angle) * radius, routeCenterLon - radius + Math.Cos(angle) * radius));
+                    }
+                    for (int i = 0; i <= pointsPerCircle; i++)
+                    {
+                        double angle = (i * 360.0 / pointsPerCircle) * Math.PI / 180;
+                        route.Add((routeCenterLat - Math.Sin(angle) * radius, routeCenterLon + radius - Math.Cos(angle) * radius));
+                    }
+                    break;
+                }
+            case 4: // НОВЫЙ: Зигзаг (сканирование области)
+                {
+                    double width = 0.03 + _random.NextDouble() * 0.02;
+                    double height = 0.03 + _random.NextDouble() * 0.02;
+                    int zigs = _random.Next(3, 5);
+                    for (int i = 0; i <= zigs; i++)
+                    {
+                        route.Add((routeCenterLat - height / 2 + (i * height / zigs), routeCenterLon - width / 2));
+                        route.Add((routeCenterLat - height / 2 + (i * height / zigs), routeCenterLon + width / 2));
+                    }
+                    break;
+                }
+            case 5: // НОВЫЙ: Случайное блуждание
+                {
+                    var currentPoint = (lat: routeCenterLat, lon: routeCenterLon);
+                    route.Add(currentPoint);
+                    int points = _random.Next(8, 15);
+                    for (int i = 0; i < points; i++)
+                    {
+                        currentPoint = (
+                            lat: currentPoint.lat + (_random.NextDouble() - 0.5) * 0.015,
+                            lon: currentPoint.lon + (_random.NextDouble() - 0.5) * 0.015
+                        );
+                        route.Add(currentPoint);
                     }
                     break;
                 }
         }
-
         return route;
     }
 
     private async Task SimulateAndBroadcast()
     {
+        ManageActiveDrones();
+
         using var scope = _serviceProvider.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
@@ -168,18 +222,6 @@ public class DroneSimulatorService : BackgroundService
                 SimulateDroneMovement(state);
             }
 
-            var telemetry = new Telemetry
-            {
-                DroneId = droneId,
-                Position = new Point(state.Longitude, state.Latitude) { SRID = 4326 },
-                Altitude = state.Altitude,
-                Speed = state.Speed,
-                Heading = state.Heading,
-                Timestamp = DateTime.UtcNow
-            };
-
-            telemetryRecords.Add(telemetry);
-
             var update = new
             {
                 id = droneId,
@@ -191,11 +233,23 @@ public class DroneSimulatorService : BackgroundService
                 status = state.Status,
                 timestamp = DateTime.UtcNow
             };
-
             updates.Add(update);
+
+            if (state.Status == "Active")
+            {
+                telemetryRecords.Add(new Telemetry
+                {
+                    DroneId = droneId,
+                    Position = new Point(state.Longitude, state.Latitude) { SRID = 4326 },
+                    Altitude = state.Altitude,
+                    Speed = state.Speed,
+                    Heading = state.Heading,
+                    Timestamp = DateTime.UtcNow
+                });
+            }
         }
 
-        if (DateTime.UtcNow.Second % 10 == 0)
+        if (telemetryRecords.Any() && DateTime.UtcNow.Second % 10 == 0)
         {
             context.Telemetry.AddRange(telemetryRecords);
             
@@ -214,7 +268,22 @@ public class DroneSimulatorService : BackgroundService
         }
 
         await _hubContext.Clients.All.SendAsync("DronesUpdated", updates);
-        await CheckDronesInZones(context, updates);
+        await CheckDronesInZones(context, updates.Where(u => ((dynamic)u).status == "Active").ToList());
+    }
+
+    private void ManageActiveDrones()
+    {
+        var activeDronesCount = _droneStates.Values.Count(s => s.Status == "Active");
+
+        if (activeDronesCount < MIN_ACTIVE_DRONES)
+        {
+            var inactiveDrone = _droneStates.FirstOrDefault(kvp => kvp.Value.Status == "Inactive");
+            if (inactiveDrone.Value != null)
+            {
+                _logger.LogInformation("Drone {DroneId} activated to maintain minimum active count.", inactiveDrone.Key);
+                ActivateDrone(inactiveDrone.Value, 53.9006, 27.5615);
+            }
+        }
     }
 
     private void SimulateDroneMovement(DroneState state)
@@ -229,10 +298,6 @@ public class DroneSimulatorService : BackgroundService
         if (distance < 0.0005)
         {
             state.CurrentWaypointIndex = (state.CurrentWaypointIndex + 1) % state.Route.Count;
-            target = state.Route[state.CurrentWaypointIndex];
-            deltaLat = target.lat - state.Latitude;
-            deltaLon = target.lon - state.Longitude;
-            distance = Math.Sqrt(deltaLat * deltaLat + deltaLon * deltaLon);
         }
 
         var moveSpeed = 0.0001 + _random.NextDouble() * 0.00005;
@@ -241,21 +306,21 @@ public class DroneSimulatorService : BackgroundService
         {
             state.Latitude += (deltaLat / distance) * moveSpeed;
             state.Longitude += (deltaLon / distance) * moveSpeed;
-            
-            state.Heading = Math.Atan2(deltaLon, deltaLat) * 180 / Math.PI;
-            if (state.Heading < 0) state.Heading += 360;
+            state.Heading = (Math.Atan2(deltaLon, deltaLat) * 180 / Math.PI + 360) % 360;
         }
 
         state.Altitude = Math.Max(50, Math.Min(500, state.Altitude + _random.NextDouble() * 10 - 5));
         state.Speed = Math.Max(8, Math.Min(25, state.Speed + _random.NextDouble() * 3 - 1.5));
 
-        if (_random.Next(1000) == 0)
+        var activeCount = _droneStates.Values.Count(s => s.Status == "Active");
+        if (activeCount > MIN_ACTIVE_DRONES && _random.Next(DEACTIVATION_CHANCE_INVERSE) == 0)
         {
-            state.Status = state.Status == "Active" ? "Inactive" : "Active";
-            _logger.LogInformation("Drone status changed to: {Status}", state.Status);
+            state.Status = "Inactive";
+            _logger.LogInformation("Drone deactivated randomly. Current active: {ActiveCount}", activeCount - 1);
         }
     }
 
+    // --- ИЗМЕНЕНО: Логика проверки вхождения в зону ---
     private async Task CheckDronesInZones(ApplicationDbContext context, List<object> updates)
     {
         var zones = await context.CoverageZones.ToListAsync();
@@ -263,15 +328,27 @@ public class DroneSimulatorService : BackgroundService
 
         foreach (var zone in zones)
         {
+            // Получаем центроид зоны для проверки
+            var zoneCenter = zone.Zone.Centroid;
+
             var dronesInZone = updates.Where(u =>
             {
                 dynamic d = u;
                 var dronePoint = new Point(d.longitude, d.latitude) { SRID = 4326 };
-                return zone.Zone?.Contains(dronePoint) ?? false;
+
+                // --- КЛЮЧЕВОЕ ИЗМЕНЕНИЕ ---
+                // Вместо проверки Contains(dronePoint) мы теперь проверяем расстояние от центроида.
+                // Это полностью соответствует логике отрисовки на фронтенде.
+                // IsWithinDistance ожидает расстояние в градусах, поэтому нам нужно его конвертировать.
+                // 1 градус широты ~ 111 км.
+                double radiusInDegrees = zone.RadiusMeters / 111320.0;
+                return zoneCenter.IsWithinDistance(dronePoint, radiusInDegrees);
+
             }).ToList();
 
             if (dronesInZone.Any())
             {
+                // Отправка уведомлений остается прежней
                 await _hubContext.Clients.Group($"zone_{zone.Id}")
                     .SendAsync("DronesInZoneUpdated", new
                     {
@@ -282,12 +359,11 @@ public class DroneSimulatorService : BackgroundService
             }
         }
     }
-
+    
     private async Task SendStatistics(ApplicationDbContext context)
     {
-        var totalDrones = await context.Drones.CountAsync();
-        var activeDrones = await context.Drones.CountAsync(d => d.Status == "Active");
-        var inactiveDrones = await context.Drones.CountAsync(d => d.Status == "Inactive");
+        var totalDrones = _droneStates.Count;
+        var activeDrones = _droneStates.Values.Count(s => s.Status == "Active");
         
         var byFrequency = await context.Drones
             .GroupBy(d => d.Frequency)
@@ -298,7 +374,7 @@ public class DroneSimulatorService : BackgroundService
         {
             total = totalDrones,
             active = activeDrones,
-            inactive = inactiveDrones,
+            inactive = totalDrones - activeDrones,
             byFrequency
         };
 
