@@ -46,28 +46,24 @@ export const DroneInfoPanel: React.FC<DroneInfoPanelProps> = ({
   const [history, setHistory] = useState<HistoryPoint[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // ✅ ИСПРАВЛЕНИЕ #1: Используем ref для хранения ID интервала автообновления
   const autoReloadIntervalRef = useRef<number | null>(null);
 
-  // ✅ ИСПРАВЛЕНИЕ #1: Загружаем историю при монтировании и при изменении drone.id
   useEffect(() => {
     loadDroneHistory();
 
-    // ✅ ИСПРАВЛЕНИЕ #1: Настраиваем автоматическое обновление каждые 3 секунды
     autoReloadIntervalRef.current = setInterval(() => {
       loadDroneHistory();
-    }, 3000); // Обновление каждые 3 секунды
+    }, 3000);
 
     console.log("✅ Auto-reload interval started for drone:", drone.id);
 
-    // Очистка интервала при размонтировании или смене дрона
     return () => {
       if (autoReloadIntervalRef.current) {
         clearInterval(autoReloadIntervalRef.current);
         console.log("🧹 Auto-reload interval cleared");
       }
     };
-  }, [drone.id]); // Перезапускаем при смене дрона
+  }, [drone.id]);
 
   const loadDroneHistory = async () => {
     setLoading(true);
@@ -112,7 +108,6 @@ export const DroneInfoPanel: React.FC<DroneInfoPanelProps> = ({
     return `${heading.toFixed(0)}° (${directions[index]})`;
   };
 
-  // ✅ График высоты с использованием Chart.js
   const altitudeChartData = {
     labels: history.map((_, index) => index).reverse(),
     datasets: [
@@ -129,7 +124,6 @@ export const DroneInfoPanel: React.FC<DroneInfoPanelProps> = ({
     ],
   };
 
-  // ✅ График скорости с использованием Chart.js
   const speedChartData = {
     labels: history.map((_, index) => index).reverse(),
     datasets: [
@@ -146,12 +140,11 @@ export const DroneInfoPanel: React.FC<DroneInfoPanelProps> = ({
     ],
   };
 
-  // Общие настройки для графиков
   const chartOptions = {
     responsive: true,
     maintainAspectRatio: false,
     animation: {
-      duration: 300, // ✅ Короткая анимация для плавного обновления
+      duration: 300,
     },
     plugins: {
       legend: {
@@ -185,10 +178,10 @@ export const DroneInfoPanel: React.FC<DroneInfoPanelProps> = ({
   };
 
   return (
-    <div className="absolute bottom-4 right-4 w-96 military-panel military-scroll rounded-lg shadow-2xl overflow-y-auto animate-slideInRight max-h-[calc(100vh-6rem)]">
-      {/* Заголовок */}
+    <div className="absolute bottom-4 right-4 w-96 military-panel rounded-lg shadow-2xl animate-slideInRight max-h-[calc(100vh-6rem)] flex flex-col overflow-hidden">
+      {/* Заголовок (статичный) */}
       <div
-        className={`px-4 py-3 ${
+        className={`px-4 py-3 shrink-0 ${
           drone.status === "Active"
             ? "bg-green-500/20 border-green-500"
             : "bg-red-500/20 border-red-500"
@@ -233,164 +226,168 @@ export const DroneInfoPanel: React.FC<DroneInfoPanelProps> = ({
         >
           ● Статус: {drone.status === "Active" ? "АКТИВЕН" : "НЕАКТИВЕН"}
         </div>
-        {/* ✅ ИСПРАВЛЕНИЕ #1: Индикатор автообновления */}
         <div className="text-xs text-gray-400 mt-1 flex items-center">
           <div className="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></div>
           Автообновление каждые 3 сек
         </div>
       </div>
 
-      {/* Текущие параметры - ✅ ИСПРАВЛЕНИЕ #1: Данные обновляются через prop drone */}
-      <div className="p-4 bg-gray-900/30">
-        <h4 className="text-xs font-semibold text-gray-400 mb-3 uppercase">
-          Текущие параметры
-        </h4>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="bg-gray-800/50 p-3 rounded border border-green-500/20">
-            <div className="text-xs text-gray-500">Координаты</div>
-            <div className="text-sm font-medium mt-1 tech-font text-green-400">
-              {drone.latitude.toFixed(6)}, {drone.longitude.toFixed(6)}
-            </div>
-          </div>
-          <div className="bg-gray-800/50 p-3 rounded border border-green-500/20">
-            <div className="text-xs text-gray-500">Высота</div>
-            <div className="text-sm font-medium mt-1 tech-font text-green-400">
-              {formatAltitude(drone.altitude)}
-            </div>
-          </div>
-          <div className="bg-gray-800/50 p-3 rounded border border-green-500/20">
-            <div className="text-xs text-gray-500">Скорость</div>
-            <div className="text-sm font-medium mt-1 tech-font text-green-400">
-              {formatSpeed(drone.speed)}
-            </div>
-          </div>
-          <div className="bg-gray-800/50 p-3 rounded border border-green-500/20">
-            <div className="text-xs text-gray-500">Курс</div>
-            <div className="text-sm font-medium mt-1 tech-font text-green-400">
-              {formatHeading(drone.heading)}
-            </div>
-          </div>
-        </div>
-
-        {/* Дополнительная информация */}
-        <div className="mt-3 pt-3 border-t border-green-500/20">
-          <div className="flex justify-between items-center text-sm">
-            <span className="text-gray-500">Частота:</span>
-            <span className="font-medium tech-font text-green-400">
-              {drone.frequency}
-            </span>
-          </div>
-          <div className="flex justify-between items-center text-sm mt-2">
-            <span className="text-gray-500">Последнее обновление:</span>
-            <span className="font-medium tech-font text-green-400">
-              {formatDate(drone.lastSeen)}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* ✅ Улучшенные графики с Chart.js */}
-      {history.length > 0 && (
-        <div className="p-4 bg-gray-900/50 border-t border-green-500/20 space-y-3">
-          {/* График высоты */}
-          <div className="bg-gray-800/50 rounded p-3 border border-green-500/20">
-            <div className="flex items-center justify-between mb-2">
-              <h4 className="text-xs text-gray-400 uppercase font-semibold">
-                График высоты
-              </h4>
-              <div className="flex items-center space-x-3 text-xs tech-font">
-                <span className="text-green-400">
-                  Макс: {Math.max(...history.map((h) => h.altitude)).toFixed(0)}
-                  м
-                </span>
-                <span className="text-blue-400">
-                  Мин: {Math.min(...history.map((h) => h.altitude)).toFixed(0)}м
-                </span>
+      {/* Контейнер для контента с общей прокруткой */}
+      <div className="grow overflow-y-auto subtle-scroll">
+        {/* Текущие параметры */}
+        <div className="p-4 bg-gray-900/30">
+          <h4 className="text-xs font-semibold text-gray-400 mb-3 uppercase">
+            Текущие параметры
+          </h4>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-gray-800/50 p-3 rounded border border-green-500/20">
+              <div className="text-xs text-gray-500">Координаты</div>
+              <div className="text-sm font-medium mt-1 tech-font text-green-400">
+                {drone.latitude.toFixed(6)}, {drone.longitude.toFixed(6)}
               </div>
             </div>
-            <div className="h-24">
-              <Line data={altitudeChartData} options={chartOptions} />
+            <div className="bg-gray-800/50 p-3 rounded border border-green-500/20">
+              <div className="text-xs text-gray-500">Высота</div>
+              <div className="text-sm font-medium mt-1 tech-font text-green-400">
+                {formatAltitude(drone.altitude)}
+              </div>
+            </div>
+            <div className="bg-gray-800/50 p-3 rounded border border-green-500/20">
+              <div className="text-xs text-gray-500">Скорость</div>
+              <div className="text-sm font-medium mt-1 tech-font text-green-400">
+                {formatSpeed(drone.speed)}
+              </div>
+            </div>
+            <div className="bg-gray-800/50 p-3 rounded border border-green-500/20">
+              <div className="text-xs text-gray-500">Курс</div>
+              <div className="text-sm font-medium mt-1 tech-font text-green-400">
+                {formatHeading(drone.heading)}
+              </div>
             </div>
           </div>
 
-          {/* График скорости */}
-          <div className="bg-gray-800/50 rounded p-3 border border-green-500/20">
-            <div className="flex items-center justify-between mb-2">
-              <h4 className="text-xs text-gray-400 uppercase font-semibold">
-                График скорости
-              </h4>
-              <div className="flex items-center space-x-3 text-xs tech-font">
-                <span className="text-yellow-400">
-                  Макс: {Math.max(...history.map((h) => h.speed)).toFixed(1)}м/с
-                </span>
-                <span className="text-orange-400">
-                  Мин: {Math.min(...history.map((h) => h.speed)).toFixed(1)}м/с
-                </span>
-              </div>
+          {/* Дополнительная информация */}
+          <div className="mt-3 pt-3 border-t border-green-500/20">
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-gray-500">Частота:</span>
+              <span className="font-medium tech-font text-green-400">
+                {drone.frequency}
+              </span>
             </div>
-            <div className="h-24">
-              <Line data={speedChartData} options={chartOptions} />
+            <div className="flex justify-between items-center text-sm mt-2">
+              <span className="text-gray-500">Последнее обновление:</span>
+              <span className="font-medium tech-font text-green-400">
+                {formatDate(drone.lastSeen)}
+              </span>
             </div>
           </div>
         </div>
-      )}
 
-      {/* История полётов */}
-      <div
-        className="p-4 overflow-y-auto military-scroll border-t border-green-500/20"
-        style={{ minHeight: "256px", maxHeight: "256px" }}
-      >
-        <h4 className="text-xs font-semibold text-gray-400 mb-3 uppercase">
-          История полётов (последние 20)
-        </h4>
-
-        {loading ? (
-          <div
-            className="flex items-center justify-center"
-            style={{ height: "200px" }}
-          >
-            <div className="text-center text-gray-500">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-400 mx-auto"></div>
-              <p className="mt-2 text-sm">Загрузка...</p>
-            </div>
-          </div>
-        ) : history.length > 0 ? (
-          <div className="space-y-2">
-            {history.map((point, index) => (
-              <div
-                key={`${point.timestamp}-${index}`}
-                className="bg-gray-800/50 p-2 rounded text-xs border border-green-500/10 hover:border-green-500/30 transition-colors"
-              >
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-400 tech-font">
-                    {formatDate(point.timestamp)}
+        {/* Графики */}
+        {history.length > 0 && (
+          <div className="p-4 bg-gray-900/50 border-t border-green-500/20 space-y-3">
+            {/* График высоты */}
+            <div className="bg-gray-800/50 rounded p-3 border border-green-500/20">
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="text-xs text-gray-400 uppercase font-semibold">
+                  График высоты
+                </h4>
+                <div className="flex items-center space-x-3 text-xs tech-font">
+                  <span className="text-green-400">
+                    Макс:{" "}
+                    {Math.max(...history.map((h) => h.altitude)).toFixed(0)}м
                   </span>
-                  <div className="flex space-x-3">
-                    <span title="Высота" className="text-green-400 tech-font">
-                      ↑{formatAltitude(point.altitude)}
+                  <span className="text-blue-400">
+                    Мин:{" "}
+                    {Math.min(...history.map((h) => h.altitude)).toFixed(0)}м
+                  </span>
+                </div>
+              </div>
+              <div className="h-24">
+                <Line data={altitudeChartData} options={chartOptions} />
+              </div>
+            </div>
+
+            {/* График скорости */}
+            <div className="bg-gray-800/50 rounded p-3 border border-green-500/20">
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="text-xs text-gray-400 uppercase font-semibold">
+                  График скорости
+                </h4>
+                <div className="flex items-center space-x-3 text-xs tech-font">
+                  <span className="text-yellow-400">
+                    Макс: {Math.max(...history.map((h) => h.speed)).toFixed(1)}
+                    м/с
+                  </span>
+                  <span className="text-orange-400">
+                    Мин: {Math.min(...history.map((h) => h.speed)).toFixed(1)}
+                    м/с
+                  </span>
+                </div>
+              </div>
+              <div className="h-24">
+                <Line data={speedChartData} options={chartOptions} />
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div
+          className="p-4 overflow-y-auto military-scroll border-t border-green-500/20"
+          style={{ minHeight: "256px", maxHeight: "256px" }}
+        >
+          <h4 className="text-xs font-semibold text-gray-400 mb-3 uppercase">
+            История полётов (последние 20)
+          </h4>
+
+          {loading ? (
+            <div
+              className="flex items-center justify-center"
+              style={{ height: "200px" }}
+            >
+              <div className="text-center text-gray-500">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-400 mx-auto"></div>
+                <p className="mt-2 text-sm">Загрузка...</p>
+              </div>
+            </div>
+          ) : history.length > 0 ? (
+            <div className="space-y-2">
+              {history.map((point, index) => (
+                <div
+                  key={`${point.timestamp}-${index}`}
+                  className="bg-gray-800/50 p-2 rounded text-xs border border-green-500/10 hover:border-green-500/30 transition-colors"
+                >
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-400 tech-font">
+                      {formatDate(point.timestamp)}
                     </span>
-                    <span
-                      title="Скорость"
-                      className="text-yellow-400 tech-font"
-                    >
-                      ➜{formatSpeed(point.speed)}
-                    </span>
-                    <span title="Курс" className="text-blue-400 tech-font">
-                      {point.heading.toFixed(0)}°
-                    </span>
+                    <div className="flex space-x-3">
+                      <span title="Высота" className="text-green-400 tech-font">
+                        ↑{formatAltitude(point.altitude)}
+                      </span>
+                      <span
+                        title="Скорость"
+                        className="text-yellow-400 tech-font"
+                      >
+                        ➜{formatSpeed(point.speed)}
+                      </span>
+                      <span title="Курс" className="text-blue-400 tech-font">
+                        {point.heading.toFixed(0)}°
+                      </span>
+                    </div>
+                  </div>
+                  <div className="text-gray-500 mt-1 tech-font">
+                    {point.latitude.toFixed(6)}, {point.longitude.toFixed(6)}
                   </div>
                 </div>
-                <div className="text-gray-500 mt-1 tech-font">
-                  {point.latitude.toFixed(6)}, {point.longitude.toFixed(6)}
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="text-sm text-gray-500 text-center py-4">
-            История полётов недоступна
-          </p>
-        )}
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-gray-500 text-center py-4">
+              История полётов недоступна
+            </p>
+          )}
+        </div>
       </div>
     </div>
   );

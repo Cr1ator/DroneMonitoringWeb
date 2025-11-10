@@ -27,6 +27,13 @@ import { MapControls } from "./../MapControls";
 import { DroneList } from "../DroneList";
 import { DroneHistoryPanel } from "../DroneHistoryPanel";
 
+// ✅ ИЗМЕНЕНИЕ #1: Определяем тип для новой информации о зонах
+interface ActiveZoneInfo {
+  zoneId: number;
+  zoneName: string;
+  droneCount: number;
+}
+
 // Компонент Tooltip для дронов (без изменений)
 const DroneTooltip: React.FC<{
   drone: Drone;
@@ -82,27 +89,44 @@ const DroneTooltip: React.FC<{
   );
 };
 
-// Панель тревоги теперь принимает количество активных зон
+// ✅ ИЗМЕНЕНИЕ #2: Полностью переписанная панель тревоги для отображения деталей
 const AlarmPanel: React.FC<{
-  activeZonesCount: number;
+  activeZones: ActiveZoneInfo[];
   onDismiss: () => void;
-}> = ({ activeZonesCount, onDismiss }) => {
-  if (activeZonesCount === 0) return null;
+}> = ({ activeZones, onDismiss }) => {
+  if (activeZones.length === 0) return null;
+
+  const totalDrones = activeZones.reduce(
+    (sum, zone) => sum + zone.droneCount,
+    0
+  );
 
   return (
-    <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-50">
+    <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-50 w-auto max-w-lg">
       <div className="military-panel border-2 border-red-500 bg-red-900/90 px-6 py-3 rounded-lg shadow-2xl animate-pulse">
-        <div className="flex items-center space-x-4">
-          <GiRadioactive className="w-8 h-8 text-red-400 animate-spin" />
-          <div>
+        <div className="flex items-start space-x-4">
+          <GiRadioactive className="w-8 h-8 text-red-400 animate-spin flex-shrink-0 mt-1" />
+          <div className="flex-grow">
             <div className="text-red-200 font-bold text-lg">ТРЕВОГА!</div>
-            <div className="text-red-300 text-sm">
-              Дроны обнаружены в {activeZonesCount} зон(е/ах)
+            <div className="text-red-300 text-sm mb-2">
+              Обнаружено {totalDrones} дрон(ов) в {activeZones.length}{" "}
+              зон(е/ах):
+            </div>
+            <div className="space-y-1 text-red-200 tech-font text-sm">
+              {activeZones.map((zone) => (
+                <div
+                  key={zone.zoneId}
+                  className="flex justify-between items-center bg-red-500/20 px-2 py-1 rounded"
+                >
+                  <span>{zone.zoneName}</span>
+                  <span className="font-bold">{zone.droneCount} дрон(а)</span>
+                </div>
+              ))}
             </div>
           </div>
           <button
             onClick={onDismiss}
-            className="military-button p-2 rounded text-red-400 hover:text-white"
+            className="military-button p-2 rounded text-red-400 hover:text-white flex-shrink-0"
             title="Закрыть"
           >
             <MdWarning className="w-5 h-5" />
@@ -146,7 +170,8 @@ export const DroneMap: React.FC = () => {
     y: number;
   } | null>(null);
 
-  const [activeZoneIds, setActiveZoneIds] = useState<Set<number>>(new Set());
+  // ✅ ИЗМЕНЕНИЕ #3: Меняем состояние для хранения подробной информации
+  const [activeZones, setActiveZones] = useState<ActiveZoneInfo[]>([]);
   const [isAlarmDismissed, setIsAlarmDismissed] = useState(false);
 
   useEffect(() => {
@@ -334,24 +359,26 @@ export const DroneMap: React.FC = () => {
     };
   }, []);
 
+  // ✅ ИЗМЕНЕНИЕ #4: Адаптируем эффект для работы с новым состоянием
   useEffect(() => {
     if (!zoneLayerRef.current) return;
 
+    // Для быстрой проверки создаем Set из ID активных зон
+    const currentActiveIds = new Set(activeZones.map((z) => z.zoneId));
+
     const newZoneStyleFunction = (feature: FeatureLike) => {
       const zoneId = feature.get("zoneId") as number;
-      const isAlarm = activeZoneIds.has(zoneId);
+      const isAlarm = currentActiveIds.has(zoneId);
       return createZoneStyle(feature, isAlarm);
     };
 
     zoneLayerRef.current.setStyle(newZoneStyleFunction);
-
-    // ✅ КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ: Принудительно перерисовываем слой
     zoneLayerRef.current.getSource()?.changed();
 
-    if (activeZoneIds.size > 0) {
+    if (activeZones.length > 0) {
       setIsAlarmDismissed(false);
     }
-  }, [activeZoneIds]);
+  }, [activeZones]);
 
   useEffect(() => {
     const connection = new signalR.HubConnectionBuilder()
@@ -431,8 +458,9 @@ export const DroneMap: React.FC = () => {
       });
     });
 
-    connection.on("ActiveZonesUpdated", (zoneIds: number[]) => {
-      setActiveZoneIds(new Set(zoneIds));
+    // ✅ ИЗМЕНЕНИЕ #5: Обновляем слушатель для приема новых данных
+    connection.on("ZoneActivityUpdated", (zoneInfo: ActiveZoneInfo[]) => {
+      setActiveZones(zoneInfo);
     });
 
     connection.onreconnecting(() => {
@@ -727,9 +755,9 @@ export const DroneMap: React.FC = () => {
         {tooltip && (
           <DroneTooltip drone={tooltip.drone} x={tooltip.x} y={tooltip.y} />
         )}
-        {!isAlarmDismissed && activeZoneIds.size > 0 && (
+        {!isAlarmDismissed && activeZones.length > 0 && (
           <AlarmPanel
-            activeZonesCount={activeZoneIds.size}
+            activeZones={activeZones}
             onDismiss={() => setIsAlarmDismissed(true)}
           />
         )}

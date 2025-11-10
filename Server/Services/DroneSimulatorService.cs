@@ -18,6 +18,9 @@ public class DroneSimulatorService : BackgroundService
     private readonly Random _random = new();
     private readonly Dictionary<int, DroneState> _droneStates = new();
 
+    // Кэшируем зоны для высокой производительности
+    private List<CoverageZone> _cachedZones = new();
+
     private class DroneState
     {
         public double Latitude { get; set; }
@@ -44,7 +47,7 @@ public class DroneSimulatorService : BackgroundService
     {
         _logger.LogInformation("🚁 Drone Simulator Service started with DYNAMIC and DIVERSE routes");
 
-        await InitializeDroneStates();
+        await InitializeSimulator();
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -61,13 +64,15 @@ public class DroneSimulatorService : BackgroundService
         }
     }
 
-    private async Task InitializeDroneStates()
+    private async Task InitializeSimulator()
     {
         using var scope = _serviceProvider.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
+        _cachedZones = await context.CoverageZones.ToListAsync();
+        _logger.LogInformation("Cached {ZoneCount} coverage zones.", _cachedZones.Count);
+
         var drones = await context.Drones.ToListAsync();
-        
         var shuffledDrones = drones.OrderBy(d => _random.Next()).ToList();
 
         double centerLat = 53.9006;
@@ -154,7 +159,7 @@ public class DroneSimulatorService : BackgroundService
                     }
                     break;
                 }
-            case 3: // НОВЫЙ: Восьмерка
+            case 3: // Восьмерка
                 {
                     double radius = 0.01 + _random.NextDouble() * 0.01;
                     int pointsPerCircle = 8;
@@ -170,7 +175,7 @@ public class DroneSimulatorService : BackgroundService
                     }
                     break;
                 }
-            case 4: // НОВЫЙ: Зигзаг (сканирование области)
+            case 4: // Зигзаг (сканирование области)
                 {
                     double width = 0.03 + _random.NextDouble() * 0.02;
                     double height = 0.03 + _random.NextDouble() * 0.02;
@@ -182,7 +187,7 @@ public class DroneSimulatorService : BackgroundService
                     }
                     break;
                 }
-            case 5: // НОВЫЙ: Случайное блуждание
+            case 5: // Случайное блуждание
                 {
                     var currentPoint = (lat: routeCenterLat, lon: routeCenterLon);
                     route.Add(currentPoint);
@@ -268,7 +273,7 @@ public class DroneSimulatorService : BackgroundService
 
         await _hubContext.Clients.All.SendAsync("DronesUpdated", updates);
 
-        await BroadcastZoneActivity(context);
+        await BroadcastZoneActivity();
     }
 
     private void ManageActiveDrones()
@@ -320,46 +325,37 @@ public class DroneSimulatorService : BackgroundService
         }
     }
 
-    // Метод для проверки зон
-    private async Task BroadcastZoneActivity(ApplicationDbContext context)
+    private async Task BroadcastZoneActivity()
     {
-        var zones = await context.CoverageZones.ToListAsync();
-        if (!zones.Any()) return;
+        if (!_cachedZones.Any()) return;
 
-        // Получаем только активные дроны для проверки
         var activeDrones = _droneStates
             .Where(kvp => kvp.Value.Status == "Active")
-            .Select(kvp => new {
-                Point = new Point(kvp.Value.Longitude, kvp.Value.Latitude) { SRID = 4326 }
-            })
+            .Select(kvp => new Point(kvp.Value.Longitude, kvp.Value.Latitude) { SRID = 4326 })
             .ToList();
 
-        if (!activeDrones.Any())
+        var activeZonesInfo = new List<object>();
+
+        if (activeDrones.Any())
         {
-            // Если нет активных дронов, отправляем пустой список
-            await _hubContext.Clients.All.SendAsync("ActiveZonesUpdated", new List<int>());
-            return;
-        }
-
-        // Используем HashSet для быстрой и уникальной вставки ID активных зон
-        var activeZoneIds = new HashSet<int>();
-
-        foreach (var zone in zones)
-        {
-            var zoneCenter = zone.Zone.Centroid;
-            double radiusInDegrees = zone.RadiusMeters / 111320.0;
-
-            // Проверяем, есть ли ХОТЯ БЫ ОДИН дрон в этой зоне
-            bool isZoneActive = activeDrones.Any(drone => zoneCenter.IsWithinDistance(drone.Point, radiusInDegrees));
-
-            if (isZoneActive)
+            foreach (var zone in _cachedZones)
             {
-                activeZoneIds.Add(zone.Id);
+                // ✅ КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ: Используем точный геометрический метод Contains
+                int dronesInZoneCount = activeDrones.Count(dronePoint => zone.Zone.Contains(dronePoint));
+
+                if (dronesInZoneCount > 0)
+                {
+                    activeZonesInfo.Add(new
+                    {
+                        zoneId = zone.Id,
+                        zoneName = zone.Name,
+                        droneCount = dronesInZoneCount
+                    });
+                }
             }
         }
-
-        // Отправляем массив ID активных зон всем клиентам
-        await _hubContext.Clients.All.SendAsync("ActiveZonesUpdated", activeZoneIds);
+        
+        await _hubContext.Clients.All.SendAsync("ZoneActivityUpdated", activeZonesInfo);
     }
     
     private async Task SendStatistics(ApplicationDbContext context)
