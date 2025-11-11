@@ -168,7 +168,7 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
                 type="checkbox"
                 checked={localFilters.statusFilter.includes("Active")}
                 onChange={() => handleStatusChange("Active")}
-                className="mr-3 w-4 h-4 text-green-500 bg-gray-700 border-gray-600 rounded focus:ring-green-500"
+                className="mr-3 w-4 h-4 military-checkbox text-green-500 bg-gray-700 border-gray-600 rounded focus:ring-green-500"
               />
               <span className="flex items-center flex-1">
                 <span className="w-3 h-3 bg-green-500 rounded-full mr-2 status-active"></span>
@@ -188,7 +188,7 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
                 type="checkbox"
                 checked={localFilters.statusFilter.includes("Inactive")}
                 onChange={() => handleStatusChange("Inactive")}
-                className="mr-3 w-4 h-4 text-red-500 bg-gray-700 border-gray-600 rounded focus:ring-red-500"
+                className="mr-3 w-4 h-4 military-checkbox text-red-500 bg-gray-700 border-gray-600 rounded focus:ring-red-500"
               />
               <span className="flex items-center flex-1">
                 <span className="w-3 h-3 bg-red-500 rounded-full mr-2"></span>
@@ -216,7 +216,7 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
                 type="checkbox"
                 checked={localFilters.frequencyFilter.includes("2.4 GHz")}
                 onChange={() => handleFrequencyChange("2.4 GHz")}
-                className="mr-3 w-4 h-4 text-blue-500 bg-gray-700 border-gray-600 rounded focus:ring-blue-500"
+                className="mr-3 w-4 h-4 military-checkbox text-blue-500 bg-gray-700 border-gray-600 rounded focus:ring-blue-500"
               />
               <span className="text-sm text-gray-300 font-medium tech-font flex-1">
                 2.4 GHz
@@ -234,7 +234,7 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
                 type="checkbox"
                 checked={localFilters.frequencyFilter.includes("5.8 GHz")}
                 onChange={() => handleFrequencyChange("5.8 GHz")}
-                className="mr-3 w-4 h-4 text-purple-500 bg-gray-700 border-gray-600 rounded focus:ring-purple-500"
+                className="mr-3 w-4 h-4 military-checkbox text-purple-500 bg-gray-700 border-gray-600 rounded focus:ring-purple-500"
               />
               <span className="text-sm text-gray-300 font-medium tech-font flex-1">
                 5.8 GHz

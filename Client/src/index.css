@@ -299,3 +299,43 @@
   background: #ef4444;
   animation: pulse-glow 2s ease-in-out infinite;
 }
+
+.military-checkbox {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+
+  width: 1.25rem; /* 20px */
+  height: 1.25rem; /* 20px */
+  border-radius: 4px;
+  position: relative;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+
+  background-color: rgba(31, 41, 55, 0.5); /* Темно-серый фон, как у панелей */
+  border: 2px solid rgba(34, 197, 94, 0.4); /* Полупрозрачная зеленая рамка */
+}
+
+.military-checkbox:hover {
+  border-color: rgba(34, 197, 94, 0.7);
+  background-color: rgba(31, 41, 55, 0.8);
+}
+
+.military-checkbox:checked {
+  background-color: rgba(34, 197, 94, 0.5); /* Зеленый фон */
+  border-color: rgba(34, 197, 94, 0.9); /* Более яркая рамка */
+}
+
+.military-checkbox:checked::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 100%;
+  height: 100%;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='%23a7f3d0' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3e%3cpath d='M5 10l5 5L20 5'/%3e%3c/svg%3e");
+  background-size: 70%;
+  background-repeat: no-repeat;
+  background-position: center;
+}

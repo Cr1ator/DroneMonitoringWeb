@@ -1,4 +1,7 @@
 import React from "react";
+import { BiSolidMap } from "react-icons/bi";
+import { HiArrowTrendingUp } from "react-icons/hi2";
+import { PiMapPinSimpleAreaBold, PiMagnifyingGlassBold } from "react-icons/pi"; // ✅ Добавлены новые иконки
 
 interface MapControlsProps {
   mapType: "osm" | "satellite";
@@ -22,8 +25,6 @@ export const MapControls: React.FC<MapControlsProps> = ({
   onResetZoom,
 }) => {
   return (
-    // ✅ ИСПРАВЛЕНИЕ #2: Изменено позиционирование с top-4 left-4 на bottom-4 left-4
-    // Теперь панель не перекрывает стандартные кнопки масштабирования OpenLayers
     <div className="absolute bottom-4 left-4 military-panel rounded-lg shadow-lg p-4 min-w-[200px] z-10">
       <h3 className="text-sm font-semibold text-gray-400 mb-3 flex items-center uppercase tracking-wider">
         <svg
@@ -103,27 +104,19 @@ export const MapControls: React.FC<MapControlsProps> = ({
                 type="checkbox"
                 checked={showZones}
                 onChange={onToggleZones}
-                className="mr-3 w-4 h-4 text-green-600 bg-gray-700 border-gray-600 rounded focus:ring-green-500"
+                className="military-checkbox mr-3"
               />
-              <span className="text-sm text-gray-300 flex items-center flex-1">
-                <svg
-                  className="w-4 h-4 mr-2 text-green-500"
-                  fill="currentColor"
-                  viewBox="0 0 20 20"
-                >
-                  <path
-                    fillRule="evenodd"
-                    d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z"
-                    clipRule="evenodd"
-                  />
-                </svg>
+              <span className="text-sm text-gray-300 flex items-center flex-1 mr-4">
+                <BiSolidMap className="w-4 h-4 mr-2 text-green-500" />
                 Зоны покрытия
               </span>
-              {showZones && (
-                <span className="text-xs text-green-400 font-medium uppercase">
-                  ON
-                </span>
-              )}
+              <span
+                className={`text-xs text-green-400 font-medium uppercase transition-opacity duration-300 ${
+                  showZones ? "opacity-100" : "opacity-0"
+                }`}
+              >
+                ON
+              </span>
             </label>
 
             {/* Траектории */}
@@ -132,29 +125,19 @@ export const MapControls: React.FC<MapControlsProps> = ({
                 type="checkbox"
                 checked={showTrajectories}
                 onChange={onToggleTrajectories}
-                className="mr-3 w-4 h-4 text-yellow-600 bg-gray-700 border-gray-600 rounded focus:ring-yellow-500"
+                className="military-checkbox mr-3"
               />
-              <span className="text-sm text-gray-300 flex items-center flex-1">
-                <svg
-                  className="w-4 h-4 mr-2 text-yellow-500"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"
-                  />
-                </svg>
+              <span className="text-sm text-gray-300 flex items-center flex-1 mr-4">
+                <HiArrowTrendingUp className="w-4 h-4 mr-2 text-yellow-500" />
                 Траектории
               </span>
-              {showTrajectories && (
-                <span className="text-xs text-green-400 font-medium uppercase">
-                  ON
-                </span>
-              )}
+              <span
+                className={`text-xs text-green-400 font-medium uppercase transition-opacity duration-300 ${
+                  showTrajectories ? "opacity-100" : "opacity-0"
+                }`}
+              >
+                ON
+              </span>
             </label>
           </div>
         </div>
@@ -213,22 +196,26 @@ export const MapControls: React.FC<MapControlsProps> = ({
           </div>
         </div>
 
-        {/* ✅ Кнопки быстрых действий */}
+        {/* Кнопки быстрых действий */}
         <div className="pt-3 border-t border-green-500/20">
           <div className="grid grid-cols-2 gap-2">
             <button
               onClick={onCenterMap}
-              className="px-2 py-2 military-button rounded text-green-400 text-xs font-semibold uppercase tracking-wider hover:bg-green-500/20"
+              className="px-2 py-2 military-button rounded text-green-400 text-xs font-semibold uppercase tracking-wider hover:bg-green-500/20 flex items-center justify-center"
               title="Центрировать карту на Минске"
             >
-              📍 Центр
+              <PiMapPinSimpleAreaBold className="w-4 h-4 mr-1" />{" "}
+              {/* ✅ Заменена эмодзи */}
+              Центр
             </button>
             <button
               onClick={onResetZoom}
-              className="px-2 py-2 military-button rounded text-green-400 text-xs font-semibold uppercase tracking-wider hover:bg-green-500/20"
+              className="px-2 py-2 military-button rounded text-green-400 text-xs font-semibold uppercase tracking-wider hover:bg-green-500/20 flex items-center justify-center"
               title="Сбросить масштаб"
             >
-              🔍 Сброс
+              <PiMagnifyingGlassBold className="w-4 h-4 mr-1" />{" "}
+              {/* ✅ Заменена эмодзи */}
+              Сброс
             </button>
           </div>
         </div>

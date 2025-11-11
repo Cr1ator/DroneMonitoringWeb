@@ -5,14 +5,22 @@ import { XYZ } from "ol/source";
 import { Vector as VectorSource } from "ol/source";
 import { Feature } from "ol";
 import { Point, LineString, Polygon } from "ol/geom";
-import { Style, Stroke, Fill, Text, Circle as CircleStyle } from "ol/style";
+import {
+  Style,
+  Stroke,
+  Fill,
+  Text,
+  Circle as CircleStyle,
+  Icon,
+} from "ol/style";
 import { fromLonLat } from "ol/proj";
 import { getDistance, offset } from "ol/sphere";
 import { defaults as defaultControls } from "ol/control";
 import * as signalR from "@microsoft/signalr";
 import { TbDrone } from "react-icons/tb";
-import { GiRadioactive } from "react-icons/gi";
+import { GiDeliveryDrone, GiRadioactive } from "react-icons/gi";
 import { MdWarning } from "react-icons/md";
+import ReactDOMServer from "react-dom/server";
 import type {
   Drone,
   DroneFilters,
@@ -359,11 +367,9 @@ export const DroneMap: React.FC = () => {
     };
   }, []);
 
-  // ✅ ИЗМЕНЕНИЕ #4: Адаптируем эффект для работы с новым состоянием
   useEffect(() => {
     if (!zoneLayerRef.current) return;
 
-    // Для быстрой проверки создаем Set из ID активных зон
     const currentActiveIds = new Set(activeZones.map((z) => z.zoneId));
 
     const newZoneStyleFunction = (feature: FeatureLike) => {
@@ -827,32 +833,106 @@ export const DroneMap: React.FC = () => {
   );
 };
 
+// Хелпер для иконки дрона с эффектом свечения
+const createDroneIconDataUri = (color: string, status: string) => {
+  const bgColor = status === "Active" ? "#22c55e" : "#ef4444";
+
+  const svgString = ReactDOMServer.renderToStaticMarkup(
+    <svg
+      width="36"
+      height="36"
+      viewBox="0 0 36 36"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      {/* Пульсирующий ореол для активных */}
+      {status === "Active" && (
+        <circle
+          cx="20"
+          cy="20"
+          r="14"
+          fill="none"
+          stroke={bgColor}
+          strokeWidth="2"
+          opacity="0.6"
+        >
+          <animate
+            attributeName="r"
+            values="14;18;14"
+            dur="2s"
+            repeatCount="indefinite"
+          />
+          <animate
+            attributeName="opacity"
+            values="0.6;0;0.6"
+            dur="2s"
+            repeatCount="indefinite"
+          />
+        </circle>
+      )}
+
+      {/* Внешний темный круг */}
+      <circle cx="20" cy="20" r="18" fill="#1a1a1a" />
+
+      {/* Внутренний цветной круг */}
+      <circle cx="20" cy="20" r="15" fill={bgColor} />
+
+      {/* Тонкая белая обводка */}
+      <circle
+        cx="20"
+        cy="20"
+        r="11"
+        fill="none"
+        stroke="#ffffff"
+        strokeWidth="1.5"
+      />
+
+      {/* Иконка дрона */}
+      <g transform="translate(20, 20) scale(1.3)">
+        <GiDeliveryDrone
+          style={{
+            color: "#ffffff",
+            fontSize: "14px",
+            transform: "translate(-7px, -7px)",
+          }}
+        />
+      </g>
+    </svg>
+  );
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgString)}`;
+};
+
 function createDroneStyle(feature: FeatureLike): Style {
   const status = feature.get("status") as string;
   const name = feature.get("name") as string;
   const altitude = feature.get("altitude") as number;
   const speed = feature.get("speed") as number;
+  const heading = feature.get("heading") as number;
   const color = status === "Active" ? "#22c55e" : "#ef4444";
+  const rotation = (heading * Math.PI) / 180;
+
   return new Style({
-    image: new CircleStyle({
-      radius: 10,
-      fill: new Fill({ color: color }),
-      stroke: new Stroke({ color: "#ffffff", width: 2 }),
+    image: new Icon({
+      src: createDroneIconDataUri(color, status),
+      scale: 1,
+      rotation: rotation,
+      anchor: [0.5, 0.5],
+      rotateWithView: true,
     }),
     text: new Text({
-      text: `${name}\n${altitude?.toFixed(0) || 0}m\n${
+      text: `${name}\n${altitude?.toFixed(0) || 0}м • ${
         speed?.toFixed(1) || 0
-      }m/s`,
-      offsetY: -25,
+      }м/с`,
+      offsetY: 28,
       font: "bold 11px 'Courier New', monospace",
-      fill: new Fill({ color: color }),
+      fill: new Fill({ color: "#ffffff" }),
       stroke: new Stroke({ color: "#000000", width: 4 }),
-      backgroundFill: new Fill({ color: "rgba(0, 0, 0, 0.8)" }),
-      padding: [4, 6, 4, 6],
+      backgroundFill: new Fill({ color: "rgba(0, 0, 0, 0.75)" }),
+      padding: [3, 8, 3, 8],
     }),
   });
 }
 
+// Простой стиль зоны (первая версия)
 function createZoneStyle(
   feature: FeatureLike,
   isAlarm: boolean = false
@@ -860,23 +940,35 @@ function createZoneStyle(
   const name = feature.get("name") as string;
   const baseColor = isAlarm ? "239, 68, 68" : "34, 197, 94";
   const hexColor = isAlarm ? "#ef4444" : "#22c55e";
+
   return new Style({
-    fill: new Fill({ color: `rgba(${baseColor}, 0.2)` }),
+    fill: new Fill({
+      color: `rgba(${baseColor}, ${isAlarm ? 0.25 : 0.15})`,
+    }),
     stroke: new Stroke({
       color: `rgba(${baseColor}, 0.9)`,
-      width: isAlarm ? 5 : 4,
+      width: isAlarm ? 4 : 3,
     }),
     text: new Text({
-      text: name || "ЗОНА",
-      font: "bold 16px 'Courier New', monospace",
+      text: isAlarm ? `⚠️ ${name} ⚠️` : name || "ЗОНА",
+      font: isAlarm
+        ? "bold 18px 'Courier New', monospace"
+        : "bold 16px 'Courier New', monospace",
       fill: new Fill({ color: hexColor }),
-      stroke: new Stroke({ color: "#000000", width: 5 }),
-      backgroundFill: new Fill({ color: "rgba(0, 0, 0, 0.9)" }),
-      padding: [8, 12, 8, 12],
+      stroke: new Stroke({ color: "#000000", width: 6 }),
+      backgroundFill: new Fill({
+        color: isAlarm ? "rgba(239, 68, 68, 0.25)" : "rgba(0, 0, 0, 0.9)",
+      }),
+      backgroundStroke: new Stroke({
+        color: hexColor,
+        width: 2,
+      }),
+      padding: [10, 16, 10, 16],
     }),
   });
 }
 
+// Простой стиль траектории (первая версия)
 function createTrajectoryStyle(feature: FeatureLike): Style {
   return new Style({
     stroke: new Stroke({
