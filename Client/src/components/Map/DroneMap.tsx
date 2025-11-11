@@ -1072,7 +1072,6 @@ export const DroneMap: React.FC = () => {
 
   return (
     <div className="flex h-screen bg-gray-900 military-grid relative overflow-hidden">
-      {/* ... (JSX для панелей, кнопок и т.д. остается без изменений) */}
       {(showDroneList || showFilterPanel || showMapControls) && (
         <div
           className="fixed inset-0 bg-black/60 z-30 lg:hidden"
@@ -1212,38 +1211,66 @@ export const DroneMap: React.FC = () => {
 
         <div
           className={`
-          fixed lg:absolute
-          bottom-0 left-0 right-0 lg:bottom-4 lg:left-4 lg:right-auto
-          transform transition-transform duration-300 ease-in-out
-          z-40 lg:z-10
-          ${showMapControls ? "translate-y-0" : "translate-y-full"}
-          ${!showMapControls && "hidden"}
+          flex-shrink-0
+          transition-all duration-300 ease-in-out
+          bg-gray-900
+          h-full
+          overflow-hidden
+          ${showMapControls ? "w-80" : "w-0"}
+          fixed lg:absolute inset-y-0 lg:inset-auto left-0 lg:left-4 lg:top-4 lg:bottom-auto lg:h-auto z-40 lg:z-10
         `}
         >
-          <MapControls
-            mapType={mapType}
-            showZones={showZones}
-            showTrajectories={showTrajectories}
-            isRulerActive={isRulerActive}
-            onToggleMapType={toggleMapType}
-            onToggleZones={() => setShowZones(!showZones)}
-            onToggleTrajectories={() => setShowTrajectories(!showTrajectories)}
-            onCenterMap={handleCenterMap}
-            onResetZoom={handleResetZoom}
-            onToggleRuler={() => {
-              const nextState = !isRulerActive;
-              setIsRulerActive(nextState);
-              if (nextState) {
-                setRulerMode("drawing");
-                setShowRulerControlPanel(true);
-                setIsRulerPanelCollapsed(false);
-              }
-              if (window.innerWidth < 1024) {
-                setShowMapControls(false);
-              }
-            }}
-            onClose={() => setShowMapControls(false)}
-          />
+          <div className="w-80 h-full lg:h-auto">
+            <MapControls
+              mapType={mapType}
+              showZones={showZones}
+              showTrajectories={showTrajectories}
+              isRulerActive={isRulerActive}
+              onToggleMapType={() => {
+                toggleMapType();
+                if (window.innerWidth < 1024) {
+                  setShowMapControls(false);
+                }
+              }}
+              onToggleZones={() => {
+                setShowZones(!showZones);
+                if (window.innerWidth < 1024) {
+                  setShowMapControls(false);
+                }
+              }}
+              onToggleTrajectories={() => {
+                setShowTrajectories(!showTrajectories);
+                if (window.innerWidth < 1024) {
+                  setShowMapControls(false);
+                }
+              }}
+              onCenterMap={() => {
+                handleCenterMap();
+                if (window.innerWidth < 1024) {
+                  setShowMapControls(false);
+                }
+              }}
+              onResetZoom={() => {
+                handleResetZoom();
+                if (window.innerWidth < 1024) {
+                  setShowMapControls(false);
+                }
+              }}
+              onToggleRuler={() => {
+                const nextState = !isRulerActive;
+                setIsRulerActive(nextState);
+                if (nextState) {
+                  setRulerMode("drawing");
+                  setShowRulerControlPanel(true);
+                  setIsRulerPanelCollapsed(false);
+                }
+                if (window.innerWidth < 1024) {
+                  setShowMapControls(false);
+                }
+              }}
+              onClose={() => setShowMapControls(false)}
+            />
+          </div>
         </div>
 
         {isRulerActive && showRulerControlPanel && (
@@ -1303,14 +1330,6 @@ export const DroneMap: React.FC = () => {
         `}
       >
         <div className="w-full sm:w-96 lg:w-96 h-full flex flex-col">
-          <div className="lg:hidden flex justify-end p-2 bg-gray-900 border-b border-green-500/20">
-            <button
-              onClick={() => setShowDroneList(false)}
-              className="military-button p-2 rounded text-green-400 hover:text-white"
-            >
-              <MdClose className="w-6 h-6" />
-            </button>
-          </div>
           <DroneList
             drones={drones}
             selectedDrone={selectedDrone}
@@ -1416,6 +1435,8 @@ function createDroneStyle(feature: FeatureLike): Style {
       scale: 1,
       rotation: rotation,
       anchor: [0.5, 0.5],
+      anchorXUnits: "fraction",
+      anchorYUnits: "fraction",
       rotateWithView: true,
     }),
     text: new Text({

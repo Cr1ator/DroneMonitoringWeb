@@ -33,7 +33,7 @@ export const MapControls: React.FC<MapControlsProps> = ({
   onClose,
 }) => {
   return (
-    <div className="military-panel rounded-t-lg lg:rounded-lg shadow-lg p-4 min-w-full lg:min-w-[200px] max-w-full lg:max-w-xs">
+    <div className="military-panel rounded-lg shadow-lg p-4 w-full h-full lg:h-auto overflow-y-auto military-scroll">
       {/* Заголовок с кнопкой закрытия для мобильных */}
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm font-semibold text-gray-400 flex items-center uppercase tracking-wider">

@@ -163,7 +163,7 @@ export const RulerControl: React.FC<RulerControlProps> = ({
                 {formatDistance(rulerData.totalDistance)}
               </p>
             </div>
-            <div className="max-h-24 overflow-y-auto military-scroll pr-2 space-y-1">
+            <div className="h-20 md:h-24 overflow-y-auto military-scroll pr-2 space-y-1">
               {rulerData.segmentDistances.map((dist, index) => (
                 <div
                   key={index}
