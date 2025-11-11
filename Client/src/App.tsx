@@ -1,4 +1,4 @@
-import React from "react";
+// import React from "react";
 import { DroneMap } from "./components/Map/DroneMap";
 import "./App.css";
 

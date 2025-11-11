@@ -15,12 +15,11 @@ import {
 } from "ol/style";
 import { fromLonLat, toLonLat } from "ol/proj";
 import { getDistance as getGeodesicDistance, offset } from "ol/sphere";
-import { defaults as defaultControls } from "ol/control";
 import { Draw, Modify } from "ol/interaction";
 import * as signalR from "@microsoft/signalr";
 import { TbDrone } from "react-icons/tb";
 import { GiDeliveryDrone, GiRadioactive } from "react-icons/gi";
-import { MdWarning, MdClose, MdSettings, MdCheckCircle } from "react-icons/md";
+import { MdClose, MdSettings, MdCheckCircle } from "react-icons/md";
 import { HiOutlineFilter } from "react-icons/hi";
 import { FaChevronUp, FaChevronDown } from "react-icons/fa";
 import ReactDOMServer from "react-dom/server";
@@ -610,9 +609,9 @@ export const DroneMap: React.FC = () => {
       });
 
       const existingFeatures = source.getFeatures();
-      const existingIds = new Set(
-        existingFeatures.map((f) => f.get("droneId"))
-      );
+      // const existingIds = new Set(
+      //   existingFeatures.map((f) => f.get("droneId"))
+      // );
       const newIds = new Set(filteredDrones.map((d) => d.id));
 
       existingFeatures.forEach((feature) => {
@@ -1345,8 +1344,7 @@ export const DroneMap: React.FC = () => {
   );
 };
 
-// ... (Функции createDroneIconDataUri, createDroneStyle, createZoneStyle, createTrajectoryStyle, createRulerStyle остаются без изменений)
-const createDroneIconDataUri = (color: string, status: string) => {
+const createDroneIconDataUri = (status: string) => {
   const bgColor = status === "Active" ? "#22c55e" : "#ef4444";
 
   const svgString = ReactDOMServer.renderToStaticMarkup(
@@ -1410,12 +1408,11 @@ function createDroneStyle(feature: FeatureLike): Style {
   const altitude = feature.get("altitude") as number;
   const speed = feature.get("speed") as number;
   const heading = feature.get("heading") as number;
-  const color = status === "Active" ? "#22c55e" : "#ef4444";
   const rotation = (heading * Math.PI) / 180;
 
   return new Style({
     image: new Icon({
-      src: createDroneIconDataUri(color, status),
+      src: createDroneIconDataUri(status),
       scale: 1,
       rotation: rotation,
       anchor: [0.5, 0.5],
@@ -1470,7 +1467,7 @@ function createZoneStyle(
   });
 }
 
-function createTrajectoryStyle(feature: FeatureLike): Style {
+function createTrajectoryStyle(): Style {
   return new Style({
     stroke: new Stroke({
       color: "rgba(251, 191, 36, 0.9)",
