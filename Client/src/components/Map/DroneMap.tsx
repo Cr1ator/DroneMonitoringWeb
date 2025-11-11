@@ -22,6 +22,7 @@ import { TbDrone } from "react-icons/tb";
 import { GiDeliveryDrone, GiRadioactive } from "react-icons/gi";
 import { MdWarning, MdClose, MdSettings, MdCheckCircle } from "react-icons/md";
 import { HiOutlineFilter } from "react-icons/hi";
+import { FaChevronUp, FaChevronDown } from "react-icons/fa";
 import ReactDOMServer from "react-dom/server";
 import type {
   Drone,
@@ -125,7 +126,9 @@ const DroneTooltip: React.FC<{
 const AlarmPanel: React.FC<{
   activeZones: ActiveZoneInfo[];
   onDismiss: () => void;
-}> = ({ activeZones, onDismiss }) => {
+  isCollapsed: boolean;
+  onToggleCollapse: () => void;
+}> = ({ activeZones, onDismiss, isCollapsed, onToggleCollapse }) => {
   if (activeZones.length === 0) return null;
 
   const totalDrones = activeZones.reduce(
@@ -134,11 +137,15 @@ const AlarmPanel: React.FC<{
   );
 
   return (
-    <div className="fixed top-2 left-1/2 transform -translate-x-1/2 z-[60] w-auto max-w-sm md:max-w-lg px-2 md:px-4">
+    <div
+      className={`fixed top-2 left-1/2 transform -translate-x-1/2 z-60 w-auto max-w-sm md:max-w-lg px-2 md:px-4 transition-transform duration-300 ease-in-out ${
+        isCollapsed ? "-translate-y-[calc(100%+1rem)]" : "translate-y-0"
+      }`}
+    >
       <div className="military-panel border-2 border-red-500 bg-red-900/95 backdrop-blur-sm px-3 py-2 md:px-4 md:py-3 rounded-lg shadow-2xl animate-pulse">
         <div className="flex items-start space-x-2 md:space-x-3">
           <GiRadioactive className="w-6 h-6 md:w-7 md:h-7 text-red-400 animate-spin flex-shrink-0 mt-0.5" />
-          <div className="flex-grow min-w-0">
+          <div className="grow min-w-0">
             <div className="text-red-200 font-bold text-sm md:text-base mb-1">
               ⚠️ ТРЕВОГА!
             </div>
@@ -160,13 +167,22 @@ const AlarmPanel: React.FC<{
               ))}
             </div>
           </div>
-          <button
-            onClick={onDismiss}
-            className="military-button p-1.5 md:p-2 rounded text-red-400 hover:text-white flex-shrink-0 transition-colors"
-            title="Закрыть"
-          >
-            <MdClose className="w-4 h-4 md:w-5 md:h-5" />
-          </button>
+          <div className="flex flex-col space-y-2">
+            <button
+              onClick={onDismiss}
+              className="military-button p-1.5 md:p-2 rounded text-red-400 hover:text-white flex-shrink-0 transition-colors"
+              title="Закрыть навсегда"
+            >
+              <MdClose className="w-4 h-4 md:w-5 md:h-5" />
+            </button>
+            <button
+              onClick={onToggleCollapse}
+              className="military-button p-1.5 md:p-2 rounded text-gray-300 hover:text-white flex-shrink-0 transition-colors"
+              title="Свернуть"
+            >
+              <FaChevronUp className="w-4 h-4 md:w-5 md:h-5" />
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -229,11 +245,13 @@ export const DroneMap: React.FC = () => {
   const [rulerMode, setRulerMode] = useState<"drawing" | "modifying">(
     "drawing"
   );
-  // <-- НОВЫЕ СОСТОЯНИЯ ДЛЯ МОБИЛЬНОГО РЕДАКТИРОВАНИЯ -->
   const [selectedVertexIndex, setSelectedVertexIndex] = useState<number | null>(
     null
   );
   const [isMovingVertex, setIsMovingVertex] = useState<boolean>(false);
+  const [showRulerControlPanel, setShowRulerControlPanel] = useState(true);
+  const [isAlarmPanelCollapsed, setIsAlarmPanelCollapsed] = useState(false);
+  const [isRulerPanelCollapsed, setIsRulerPanelCollapsed] = useState(false);
 
   const isRulerActiveRef = useRef(isRulerActive);
   useEffect(() => {
@@ -922,7 +940,6 @@ export const DroneMap: React.FC = () => {
         map.addInteraction(draw);
         rulerInteractionsRef.current.draw = draw;
       } else if (rulerMode === "modifying") {
-        // Modify для десктопа
         const isDesktop = window.innerWidth >= 1024;
         if (isDesktop) {
           const source = rulerLayerRef.current.getSource();
@@ -954,7 +971,6 @@ export const DroneMap: React.FC = () => {
     };
   }, [isRulerActive, rulerMode, updateRulerMeasurements, selectedVertexIndex]);
 
-  // <-- ИЗМЕНЕНО: Логика клика для выбора/добавления/удаления -->
   useEffect(() => {
     const map = mapInstanceRef.current;
     if (!map || rulerMode !== "modifying" || isMovingVertex) {
@@ -965,7 +981,7 @@ export const DroneMap: React.FC = () => {
       if (!rulerFeatureRef.current) return;
 
       const clickedPixel = event.pixel;
-      const hitTolerance = 20; // Увеличено для мобильных
+      const hitTolerance = 20;
 
       const lineGeom = rulerFeatureRef.current.getGeometry() as LineString;
       const coords = lineGeom.getCoordinates();
@@ -981,12 +997,15 @@ export const DroneMap: React.FC = () => {
 
         if (distance <= hitTolerance) {
           setSelectedVertexIndex(i);
+          setShowRulerControlPanel(false);
+          rulerLayerRef.current?.getSource()?.changed();
           return;
         }
       }
 
-      // Если не попали в вершину, сбрасываем выбор
       setSelectedVertexIndex(null);
+      setShowRulerControlPanel(true);
+      rulerLayerRef.current?.getSource()?.changed();
     };
 
     map.on("click", handleModifyClick);
@@ -996,7 +1015,6 @@ export const DroneMap: React.FC = () => {
     };
   }, [rulerMode, isMovingVertex, updateRulerMeasurements]);
 
-  // <-- НОВЫЕ ОБРАБОТЧИКИ -->
   const handleUndo = () => {
     if (!rulerFeatureRef.current) return;
     const lineGeom = rulerFeatureRef.current.getGeometry() as LineString;
@@ -1023,13 +1041,11 @@ export const DroneMap: React.FC = () => {
       updateRulerMeasurements(rulerFeatureRef.current);
     }
     setSelectedVertexIndex(null);
+    setShowRulerControlPanel(true);
   };
 
   const handleStartMoveVertex = () => {
     setIsMovingVertex(true);
-    mapInstanceRef.current
-      ?.getInteractions()
-      .forEach((i) => i.setActive(false));
   };
 
   const handleConfirmMoveVertex = () => {
@@ -1051,7 +1067,7 @@ export const DroneMap: React.FC = () => {
 
     setIsMovingVertex(false);
     setSelectedVertexIndex(null);
-    mapInstanceRef.current.getInteractions().forEach((i) => i.setActive(true));
+    setShowRulerControlPanel(true);
   };
 
   return (
@@ -1088,7 +1104,6 @@ export const DroneMap: React.FC = () => {
       <div className="flex-1 relative">
         <div ref={mapRef} className="w-full h-full" />
 
-        {/* <-- НОВЫЕ ЭЛЕМЕНТЫ UI ДЛЯ ПЕРЕМЕЩЕНИЯ ТОЧКИ --> */}
         {isMovingVertex && (
           <>
             <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30 pointer-events-none">
@@ -1113,10 +1128,25 @@ export const DroneMap: React.FC = () => {
         )}
 
         {!isAlarmDismissed && activeZones.length > 0 && (
-          <AlarmPanel
-            activeZones={activeZones}
-            onDismiss={() => setIsAlarmDismissed(true)}
-          />
+          <>
+            <AlarmPanel
+              activeZones={activeZones}
+              onDismiss={() => setIsAlarmDismissed(true)}
+              isCollapsed={isAlarmPanelCollapsed}
+              onToggleCollapse={() => setIsAlarmPanelCollapsed(true)}
+            />
+            {isAlarmPanelCollapsed && (
+              <button
+                onClick={() => setIsAlarmPanelCollapsed(false)}
+                className="fixed top-2 left-1/2 transform -translate-x-1/2 z-[60] military-button p-2 rounded-b-lg text-red-400 animate-pulse"
+                title="Показать тревогу"
+              >
+                <GiRadioactive className="w-5 h-5 mr-2" />
+                <span>ТРЕВОГА</span>
+                <FaChevronDown className="w-4 h-4 ml-2" />
+              </button>
+            )}
+          </>
         )}
 
         <div className="absolute top-20 left-4 hidden lg:flex flex-col space-y-2 z-20">
@@ -1205,6 +1235,8 @@ export const DroneMap: React.FC = () => {
               setIsRulerActive(nextState);
               if (nextState) {
                 setRulerMode("drawing");
+                setShowRulerControlPanel(true);
+                setIsRulerPanelCollapsed(false);
               }
               if (window.innerWidth < 1024) {
                 setShowMapControls(false);
@@ -1214,14 +1246,18 @@ export const DroneMap: React.FC = () => {
           />
         </div>
 
-        {isRulerActive && (
+        {isRulerActive && showRulerControlPanel && (
           <RulerControl
             rulerData={rulerData}
             isDrawing={rulerMode === "drawing"}
+            isCollapsed={isRulerPanelCollapsed}
             onClose={() => setIsRulerActive(false)}
             onContinueDrawing={() => setRulerMode("drawing")}
             onFinishDrawing={() => setRulerMode("modifying")}
             onUndo={handleUndo}
+            onToggleCollapse={() =>
+              setIsRulerPanelCollapsed(!isRulerPanelCollapsed)
+            }
           />
         )}
 
@@ -1229,7 +1265,11 @@ export const DroneMap: React.FC = () => {
           isVisible={selectedVertexIndex !== null && !isMovingVertex}
           onMove={handleStartMoveVertex}
           onDelete={handleDeleteVertex}
-          onDeselect={() => setSelectedVertexIndex(null)}
+          onDeselect={() => {
+            setSelectedVertexIndex(null);
+            setShowRulerControlPanel(true);
+            rulerLayerRef.current?.getSource()?.changed();
+          }}
         />
 
         {selectedDrone && (
@@ -1304,7 +1344,7 @@ export const DroneMap: React.FC = () => {
   );
 };
 
-// ... (Функции createDroneIconDataUri, createDroneStyle, createZoneStyle, createTrajectoryStyle остаются без изменений)
+// ... (Функции createDroneIconDataUri, createDroneStyle, createZoneStyle, createTrajectoryStyle, createRulerStyle остаются без изменений)
 const createDroneIconDataUri = (color: string, status: string) => {
   const bgColor = status === "Active" ? "#22c55e" : "#ef4444";
 
@@ -1440,7 +1480,6 @@ function createTrajectoryStyle(feature: FeatureLike): Style {
   });
 }
 
-// <-- ИЗМЕНЕНО: Стиль теперь принимает selectedVertexIndex -->
 const createRulerStyle = (
   feature: FeatureLike,
   selectedVertexIndex: number | null
