@@ -4,54 +4,52 @@ using DroneMonitoring.Server.Services;
 using Microsoft.EntityFrameworkCore;
 using NetTopologySuite.Geometries;
 using NetTopologySuite;
+using System.Text.RegularExpressions;
 
 var builder = WebApplication.CreateBuilder(args);
-
-// ===== ДИАГНОСТИКА: Проверяем переменные окружения =====
-Console.WriteLine("========================================");
-Console.WriteLine("🔍 RAILWAY ENVIRONMENT VARIABLES DEBUG:");
-Console.WriteLine("========================================");
-
-var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
-var databasePrivateUrl = Environment.GetEnvironmentVariable("DATABASE_PRIVATE_URL");
-var databasePublicUrl = Environment.GetEnvironmentVariable("DATABASE_PUBLIC_URL");
-var railwayEnv = Environment.GetEnvironmentVariable("RAILWAY_ENVIRONMENT");
-var port = Environment.GetEnvironmentVariable("PORT");
-
-Console.WriteLine($"DATABASE_URL: {(string.IsNullOrEmpty(databaseUrl) ? "❌ NOT SET" : $"✅ SET (length: {databaseUrl.Length})")}");
-Console.WriteLine($"DATABASE_PRIVATE_URL: {(string.IsNullOrEmpty(databasePrivateUrl) ? "❌ NOT SET" : $"✅ SET (length: {databasePrivateUrl.Length})")}");
-Console.WriteLine($"DATABASE_PUBLIC_URL: {(string.IsNullOrEmpty(databasePublicUrl) ? "❌ NOT SET" : $"✅ SET (length: {databasePublicUrl.Length})")}");
-Console.WriteLine($"RAILWAY_ENVIRONMENT: {railwayEnv ?? "❌ NOT SET"}");
-Console.WriteLine($"PORT: {port ?? "❌ NOT SET"}");
-
-if (!string.IsNullOrEmpty(databaseUrl))
-{
-    Console.WriteLine($"DATABASE_URL first 50 chars: {databaseUrl.Substring(0, Math.Min(50, databaseUrl.Length))}...");
-}
-if (!string.IsNullOrEmpty(databasePrivateUrl))
-{
-    Console.WriteLine($"DATABASE_PRIVATE_URL first 50 chars: {databasePrivateUrl.Substring(0, Math.Min(50, databasePrivateUrl.Length))}...");
-}
-
-Console.WriteLine("========================================\n");
 
 // Add services to the container
 builder.Services.AddControllers();
 
-// ===== DATABASE CONFIGURATION WITH DETAILED LOGGING =====
+// ===== DATABASE CONFIGURATION WITH URI PARSER =====
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
 {
-    // ИСПРАВЛЕНО: Читаем DATABASE_URL из переменных окружения
-    var connectionString = Environment.GetEnvironmentVariable("DATABASE_URL")
-        ?? Environment.GetEnvironmentVariable("DATABASE_PRIVATE_URL")
-        ?? builder.Configuration.GetConnectionString("DefaultConnection")
-        ?? "Host=localhost;Database=drone_monitoring;Username=postgres;Password=postgres";
+    string? connectionString = null;
     
-    // Исправляем postgres:// на postgresql:// если нужно
-    if (!string.IsNullOrEmpty(connectionString) && connectionString.StartsWith("postgres://"))
+    // Пробуем получить connection string из разных источников
+    var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
+    var databasePrivateUrl = Environment.GetEnvironmentVariable("DATABASE_PRIVATE_URL");
+    var databasePublicUrl = Environment.GetEnvironmentVariable("DATABASE_PUBLIC_URL");
+    
+    if (!string.IsNullOrEmpty(databaseUrl))
     {
-        connectionString = connectionString.Replace("postgres://", "postgresql://");
+        connectionString = ConvertUriToConnectionString(databaseUrl);
+        Console.WriteLine($"📊 Using DATABASE_URL (converted from URI)");
     }
+    else if (!string.IsNullOrEmpty(databasePrivateUrl))
+    {
+        connectionString = ConvertUriToConnectionString(databasePrivateUrl);
+        Console.WriteLine($"📊 Using DATABASE_PRIVATE_URL (converted from URI)");
+    }
+    else if (!string.IsNullOrEmpty(databasePublicUrl))
+    {
+        connectionString = ConvertUriToConnectionString(databasePublicUrl);
+        Console.WriteLine($"📊 Using DATABASE_PUBLIC_URL (converted from URI)");
+    }
+    else
+    {
+        connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
+            ?? "Host=localhost;Database=drone_monitoring;Username=postgres;Password=postgres";
+        Console.WriteLine($"📊 Using fallback connection string");
+    }
+    
+    if (string.IsNullOrEmpty(connectionString))
+    {
+        throw new InvalidOperationException("DATABASE_URL is not configured properly");
+    }
+    
+    Console.WriteLine($"✅ Connection string ready (length: {connectionString.Length})");
+    Console.WriteLine($"   Preview: {connectionString.Substring(0, Math.Min(60, connectionString.Length))}...\n");
     
     options.UseNpgsql(connectionString, x => x.UseNetTopologySuite());
 });
@@ -116,12 +114,7 @@ app.MapHub<DroneTrackingHub>("/droneHub");
 app.MapGet("/health", () => Results.Ok(new { 
     status = "healthy", 
     timestamp = DateTime.UtcNow,
-    environment = new {
-        isRailway = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("RAILWAY_ENVIRONMENT")),
-        hasDatabaseUrl = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DATABASE_URL")),
-        hasPrivateUrl = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DATABASE_PRIVATE_URL")),
-        hasPublicUrl = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DATABASE_PUBLIC_URL"))
-    }
+    database = "configured"
 }));
 
 // --- Инициализация БД ---
@@ -216,6 +209,50 @@ app.Logger.LogInformation("🔌 Port: {Port}", serverPort);
 app.Logger.LogInformation("🌐 Allowed CORS Origins: {Origins}", string.Join(", ", allowedOrigins));
 
 app.Run($"http://0.0.0.0:{serverPort}");
+
+// ===== HELPER: Convert PostgreSQL URI to Connection String =====
+static string ConvertUriToConnectionString(string databaseUrl)
+{
+    try
+    {
+        // Если уже в формате Keyword/Value - возвращаем как есть
+        if (!databaseUrl.StartsWith("postgres://") && !databaseUrl.StartsWith("postgresql://"))
+        {
+            return databaseUrl;
+        }
+        
+        // Парсим URI
+        var uri = new Uri(databaseUrl.Replace("postgres://", "postgresql://"));
+        
+        var host = uri.Host;
+        var port = uri.Port > 0 ? uri.Port : 5432;
+        var database = uri.AbsolutePath.TrimStart('/');
+        var username = uri.UserInfo.Split(':')[0];
+        var password = uri.UserInfo.Contains(':') ? uri.UserInfo.Split(':')[1] : "";
+        
+        // Конвертируем в Npgsql connection string формат
+        var connectionString = $"Host={host};Port={port};Database={database};Username={username};Password={password}";
+        
+        // Добавляем SSL параметры если нужно
+        if (host.Contains("railway.internal") || host.Contains(".railway.app") || host.Contains("proxy.rlwy.net"))
+        {
+            connectionString += ";SSL Mode=Require;Trust Server Certificate=true";
+        }
+        
+        Console.WriteLine($"🔄 Converted URI to connection string");
+        Console.WriteLine($"   Host: {host}");
+        Console.WriteLine($"   Port: {port}");
+        Console.WriteLine($"   Database: {database}");
+        Console.WriteLine($"   Username: {username}");
+        
+        return connectionString;
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"❌ Error converting URI: {ex.Message}");
+        throw new InvalidOperationException($"Failed to parse DATABASE_URL: {ex.Message}", ex);
+    }
+}
 
 static Polygon CreateGeodesicCirclePolygon(GeometryFactory factory, double centerLon, double centerLat, double radiusMeters)
 {
