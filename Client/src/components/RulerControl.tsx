@@ -1,6 +1,6 @@
 import React from "react";
-import { FaRulerCombined, FaCopy, FaTimes } from "react-icons/fa";
-import { LuMousePointerClick } from "react-icons/lu";
+import { FaRulerCombined, FaCopy, FaTimes, FaCheck } from "react-icons/fa";
+import { LuMousePointerClick, LuPlus } from "react-icons/lu";
 
 interface RulerData {
   totalDistance: number;
@@ -10,12 +10,18 @@ interface RulerData {
 
 interface RulerControlProps {
   rulerData: RulerData | null;
+  isDrawing: boolean;
   onClose: () => void;
+  onContinueDrawing: () => void;
+  onFinishDrawing: () => void;
 }
 
 export const RulerControl: React.FC<RulerControlProps> = ({
   rulerData,
+  isDrawing,
   onClose,
+  onContinueDrawing,
+  onFinishDrawing,
 }) => {
   const formatDistance = (d: number) => {
     if (d < 1000) {
@@ -60,6 +66,26 @@ export const RulerControl: React.FC<RulerControlProps> = ({
             Измерения
           </h3>
           <div className="flex items-center space-x-2">
+            {hasData && isDrawing && (
+              <button
+                onClick={onFinishDrawing}
+                className="military-button p-2 rounded text-green-400 flex items-center text-xs"
+                title="Завершить рисование"
+              >
+                <FaCheck className="w-4 h-4 mr-1" />
+                Завершить
+              </button>
+            )}
+            {hasData && !isDrawing && (
+              <button
+                onClick={onContinueDrawing}
+                className="military-button p-2 rounded text-green-400 flex items-center text-xs"
+                title="Продолжить рисование"
+              >
+                <LuPlus className="w-4 h-4 mr-1" />
+                Продолжить
+              </button>
+            )}
             {hasData && (
               <button
                 onClick={handleCopy}
@@ -83,10 +109,10 @@ export const RulerControl: React.FC<RulerControlProps> = ({
           <div className="flex flex-col items-center justify-center h-24 text-center">
             <LuMousePointerClick className="w-8 h-8 text-green-400 mb-2" />
             <p className="text-gray-300">
-              Кликните на карту, чтобы поставить первую точку.
+              Кликните на карту, чтобы поставить точку.
             </p>
             <p className="text-xs text-gray-500 mt-1">
-              Двойной клик для завершения.
+              Нажмите "Завершить", когда закончите.
             </p>
           </div>
         ) : (

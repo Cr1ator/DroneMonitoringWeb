@@ -40,6 +40,7 @@ import { DroneList } from "../DroneList";
 import { DroneHistoryPanel } from "../DroneHistoryPanel";
 import { RulerControl } from "../RulerControl";
 
+// ... (Компоненты HamburgerIcon, DroneTooltip, AlarmPanel остаются без изменений)
 const HamburgerIcon = () => (
   <svg
     className="w-6 h-6"
@@ -173,6 +174,15 @@ const AlarmPanel: React.FC<{
   );
 };
 
+// <-- ИЗМЕНЕНО: Стиль для курсора-прицела (только кружок, без линии) -->
+const rulerCursorStyle = new Style({
+  image: new CircleStyle({
+    radius: 6,
+    fill: new Fill({ color: "rgba(0, 255, 255, 0.5)" }),
+    stroke: new Stroke({ color: "#00ffff", width: 1 }),
+  }),
+});
+
 export const DroneMap: React.FC = () => {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<Map | null>(null);
@@ -219,13 +229,16 @@ export const DroneMap: React.FC = () => {
   const [isAlarmDismissed, setIsAlarmDismissed] = useState(false);
   const [isRulerActive, setIsRulerActive] = useState(false);
   const [rulerData, setRulerData] = useState<RulerData | null>(null);
+  const [rulerMode, setRulerMode] = useState<"drawing" | "modifying">(
+    "drawing"
+  );
 
-  // <-- ИЗМЕНЕНО: Добавляем ref для отслеживания актуального состояния линейки в обработчиках -->
   const isRulerActiveRef = useRef(isRulerActive);
   useEffect(() => {
     isRulerActiveRef.current = isRulerActive;
   }, [isRulerActive]);
 
+  // ... (useEffect для мобильных панелей, dronesRef, zonesRef, isPointInAnyZone, isDroneInAnyZone, useEffect для дронов в зонах - без изменений)
   useEffect(() => {
     if (window.innerWidth < 1024) {
       setShowDroneList(false);
@@ -294,7 +307,6 @@ export const DroneMap: React.FC = () => {
     });
   }, [drones, isDroneInAnyZone]);
 
-  // <-- ИЗМЕНЕНО: Этот useEffect теперь выполняется ТОЛЬКО ОДИН РАЗ -->
   useEffect(() => {
     if (!mapRef.current || mapInstanceRef.current) return;
 
@@ -351,9 +363,7 @@ export const DroneMap: React.FC = () => {
       }
     }, 100);
 
-    // Обработчики событий теперь устанавливаются здесь и используют ref
     map.on("click", (event) => {
-      // <-- ИЗМЕНЕНО: Проверяем актуальное состояние через ref -->
       if (isRulerActiveRef.current) return;
       const feature = map.forEachFeatureAtPixel(event.pixel, (f) => f, {
         layerFilter: (layer) => layer === droneLayer,
@@ -371,7 +381,6 @@ export const DroneMap: React.FC = () => {
     });
 
     map.on("pointermove", (event) => {
-      // <-- ИЗМЕНЕНО: Проверяем актуальное состояние через ref -->
       if (isRulerActiveRef.current) {
         map.getTargetElement().style.cursor = "";
         setTooltip(null);
@@ -401,8 +410,9 @@ export const DroneMap: React.FC = () => {
         map.dispose();
       }
     };
-  }, []); // <-- ИЗМЕНЕНО: Пустой массив зависимостей, чтобы хук выполнился один раз
+  }, []);
 
+  // ... (useEffect для анимации зон, обновления стилей зон, SignalR, и т.д. остаются без изменений)
   useEffect(() => {
     if (!zoneLayerRef.current) return;
 
@@ -823,6 +833,18 @@ export const DroneMap: React.FC = () => {
 
     const geometry = feature.getGeometry() as LineString;
     const coordinates = geometry.getCoordinates();
+    if (coordinates.length < 2) {
+      setRulerData({
+        totalDistance: 0,
+        segmentDistances: [],
+        coordinates: coordinates.map((c) => ({
+          lon: toLonLat(c)[0],
+          lat: toLonLat(c)[1],
+        })),
+      });
+      return;
+    }
+
     const lonLatCoords = coordinates.map((c) => toLonLat(c));
 
     let totalDistance = 0;
@@ -841,6 +863,7 @@ export const DroneMap: React.FC = () => {
     });
   }, []);
 
+  // <-- ИЗМЕНЕНО: Основной useEffect для управления линейкой -->
   useEffect(() => {
     const map = mapInstanceRef.current;
     if (!map) return;
@@ -855,108 +878,124 @@ export const DroneMap: React.FC = () => {
       rulerInteractionsRef.current = {};
     };
 
-    const clearRulerLayer = () => {
-      rulerFeatureRef.current = null;
-      updateRulerMeasurements(null);
+    if (isRulerActive) {
+      if (!rulerLayerRef.current) {
+        const source = new VectorSource();
+        const layer = new VectorLayer({
+          source: source,
+          style: createRulerStyle,
+          zIndex: 200,
+        });
+        map.addLayer(layer);
+        rulerLayerRef.current = layer;
+      }
+
+      cleanupInteractions();
+
+      if (rulerMode === "drawing") {
+        const source = rulerLayerRef.current.getSource();
+        if (!source) return;
+
+        const draw = new Draw({
+          source: source, // Рисуем на временном источнике
+          type: "Point",
+          style: rulerCursorStyle,
+        });
+
+        draw.on("drawend", (event) => {
+          const pointGeom = event.feature.getGeometry() as Point;
+          const coord = pointGeom.getCoordinates();
+
+          // Удаляем временную точку
+          source.removeFeature(event.feature);
+
+          if (!rulerFeatureRef.current) {
+            // Создаем новую линию, если ее нет
+            const newLine = new LineString([coord]);
+            rulerFeatureRef.current = new Feature(newLine);
+            source.addFeature(rulerFeatureRef.current);
+          } else {
+            // Добавляем точку к существующей линии
+            const lineGeom =
+              rulerFeatureRef.current.getGeometry() as LineString;
+            lineGeom.appendCoordinate(coord);
+          }
+          updateRulerMeasurements(rulerFeatureRef.current);
+        });
+
+        map.addInteraction(draw);
+        rulerInteractionsRef.current.draw = draw;
+      } else if (rulerMode === "modifying") {
+        const source = rulerLayerRef.current.getSource();
+        if (!source) return;
+
+        const modify = new Modify({ source: source, style: createRulerStyle });
+        const select = new Select({
+          condition: click,
+          style: createRulerVertexStyle,
+          layers: [rulerLayerRef.current],
+        });
+
+        modify.on("modifyend", (event) => {
+          const feature = event.features.getArray()[0];
+          if (feature) updateRulerMeasurements(feature);
+        });
+
+        select.on("select", (event) => {
+          if (event.selected.length > 0) {
+            const selectedFeature = event.selected[0];
+            const geometry = selectedFeature.getGeometry();
+            if (geometry instanceof Point) {
+              const lineFeature = rulerFeatureRef.current;
+              if (!lineFeature) return;
+              const lineGeom = lineFeature.getGeometry() as LineString;
+              const coords = lineGeom.getCoordinates();
+              if (coords.length <= 2) {
+                select.getFeatures().clear();
+                return;
+              }
+              const selectedCoord = geometry.getCoordinates();
+              const newCoords = coords.filter(
+                (c) => c[0] !== selectedCoord[0] || c[1] !== selectedCoord[1]
+              );
+              lineGeom.setCoordinates(newCoords);
+              updateRulerMeasurements(lineFeature);
+            }
+            select.getFeatures().clear();
+          }
+        });
+
+        map.addInteraction(modify);
+        map.addInteraction(select);
+        rulerInteractionsRef.current = { modify, select };
+      }
+    } else {
+      cleanupInteractions();
       if (rulerLayerRef.current) {
         rulerLayerRef.current.getSource()?.clear();
         map.removeLayer(rulerLayerRef.current);
         rulerLayerRef.current = null;
       }
-    };
-
-    if (isRulerActive) {
-      const source = new VectorSource();
-      const layer = new VectorLayer({
-        source: source,
-        style: createRulerStyle,
-        zIndex: 200,
-      });
-      map.addLayer(layer);
-      rulerLayerRef.current = layer;
-
-      const draw = new Draw({
-        source: source,
-        type: "LineString",
-        style: createRulerStyle,
-      });
-
-      const modify = new Modify({ source: source, style: createRulerStyle });
-      const select = new Select({
-        condition: click,
-        style: createRulerVertexStyle,
-        layers: [layer],
-      });
-
-      rulerInteractionsRef.current = { draw, modify, select };
-      map.addInteraction(draw);
-      map.addInteraction(modify);
-      map.addInteraction(select);
-
-      draw.on("drawstart", () => {
-        source.clear();
-        rulerFeatureRef.current = null;
-      });
-
-      draw.on("drawend", (event) => {
-        rulerFeatureRef.current = event.feature;
-        updateRulerMeasurements(event.feature);
-      });
-
-      modify.on("modifyend", (event) => {
-        const feature = event.features.getArray()[0];
-        if (feature) {
-          updateRulerMeasurements(feature);
-        }
-      });
-
-      select.on("select", (event) => {
-        if (event.selected.length > 0) {
-          const selectedFeature = event.selected[0];
-          const geometry = selectedFeature.getGeometry();
-          if (geometry instanceof Point) {
-            const lineFeature = rulerFeatureRef.current;
-            if (!lineFeature) return;
-
-            const lineGeom = lineFeature.getGeometry() as LineString;
-            const coords = lineGeom.getCoordinates();
-
-            if (coords.length <= 2) {
-              console.log("Нельзя удалить, осталось всего 2 точки.");
-              select.getFeatures().clear();
-              return;
-            }
-
-            const selectedCoord = geometry.getCoordinates();
-            const newCoords = coords.filter(
-              (c) => c[0] !== selectedCoord[0] || c[1] !== selectedCoord[1]
-            );
-
-            lineGeom.setCoordinates(newCoords);
-            updateRulerMeasurements(lineFeature);
-          }
-          select.getFeatures().clear();
-        }
-      });
-    } else {
-      cleanupInteractions();
-      clearRulerLayer();
+      rulerFeatureRef.current = null;
+      updateRulerMeasurements(null);
     }
 
     return () => {
       cleanupInteractions();
-      if (map && rulerLayerRef.current) {
-        map.removeLayer(rulerLayerRef.current);
-      }
     };
-  }, [isRulerActive, updateRulerMeasurements]);
+  }, [isRulerActive, rulerMode, updateRulerMeasurements]);
 
   useEffect(() => {
     const map = mapInstanceRef.current;
     if (!map) return;
 
     const handleMapClick = (event: any) => {
-      if (!isRulerActiveRef.current || !rulerFeatureRef.current) return;
+      if (
+        !isRulerActiveRef.current ||
+        !rulerFeatureRef.current ||
+        rulerMode !== "modifying"
+      )
+        return;
 
       const featureAtPixel = map.forEachFeatureAtPixel(event.pixel, (f) => f, {
         layerFilter: (l) => l === rulerLayerRef.current,
@@ -1009,10 +1048,11 @@ export const DroneMap: React.FC = () => {
     return () => {
       map.un("click", handleMapClick);
     };
-  }, [updateRulerMeasurements]);
+  }, [rulerMode, updateRulerMeasurements]);
 
   return (
     <div className="flex h-screen bg-gray-900 military-grid relative overflow-hidden">
+      {/* ... (JSX для панелей, кнопок и т.д. остается без изменений) */}
       {(showDroneList || showFilterPanel || showMapControls) && (
         <div
           className="fixed inset-0 bg-black/60 z-30 lg:hidden"
@@ -1136,7 +1176,16 @@ export const DroneMap: React.FC = () => {
             onToggleTrajectories={() => setShowTrajectories(!showTrajectories)}
             onCenterMap={handleCenterMap}
             onResetZoom={handleResetZoom}
-            onToggleRuler={() => setIsRulerActive(!isRulerActive)}
+            onToggleRuler={() => {
+              const nextState = !isRulerActive;
+              setIsRulerActive(nextState);
+              if (nextState) {
+                setRulerMode("drawing");
+              }
+              if (window.innerWidth < 1024) {
+                setShowMapControls(false);
+              }
+            }}
             onClose={() => setShowMapControls(false)}
           />
         </div>
@@ -1144,7 +1193,10 @@ export const DroneMap: React.FC = () => {
         {isRulerActive && (
           <RulerControl
             rulerData={rulerData}
+            isDrawing={rulerMode === "drawing"}
             onClose={() => setIsRulerActive(false)}
+            onContinueDrawing={() => setRulerMode("drawing")}
+            onFinishDrawing={() => setRulerMode("modifying")}
           />
         )}
 
@@ -1220,6 +1272,7 @@ export const DroneMap: React.FC = () => {
   );
 };
 
+// ... (Функции createDroneIconDataUri, createDroneStyle, createZoneStyle, createTrajectoryStyle остаются без изменений)
 const createDroneIconDataUri = (color: string, status: string) => {
   const bgColor = status === "Active" ? "#22c55e" : "#ef4444";
 
