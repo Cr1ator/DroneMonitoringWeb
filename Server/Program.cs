@@ -7,22 +7,92 @@ using NetTopologySuite;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// ===== ДИАГНОСТИКА: Проверяем переменные окружения =====
+Console.WriteLine("========================================");
+Console.WriteLine("🔍 RAILWAY ENVIRONMENT VARIABLES DEBUG:");
+Console.WriteLine("========================================");
+
+var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
+var databasePrivateUrl = Environment.GetEnvironmentVariable("DATABASE_PRIVATE_URL");
+var databasePublicUrl = Environment.GetEnvironmentVariable("DATABASE_PUBLIC_URL");
+var railwayEnv = Environment.GetEnvironmentVariable("RAILWAY_ENVIRONMENT");
+var port = Environment.GetEnvironmentVariable("PORT");
+
+Console.WriteLine($"DATABASE_URL: {(string.IsNullOrEmpty(databaseUrl) ? "❌ NOT SET" : $"✅ SET (length: {databaseUrl.Length})")}");
+Console.WriteLine($"DATABASE_PRIVATE_URL: {(string.IsNullOrEmpty(databasePrivateUrl) ? "❌ NOT SET" : $"✅ SET (length: {databasePrivateUrl.Length})")}");
+Console.WriteLine($"DATABASE_PUBLIC_URL: {(string.IsNullOrEmpty(databasePublicUrl) ? "❌ NOT SET" : $"✅ SET (length: {databasePublicUrl.Length})")}");
+Console.WriteLine($"RAILWAY_ENVIRONMENT: {railwayEnv ?? "❌ NOT SET"}");
+Console.WriteLine($"PORT: {port ?? "❌ NOT SET"}");
+
+if (!string.IsNullOrEmpty(databaseUrl))
+{
+    Console.WriteLine($"DATABASE_URL first 50 chars: {databaseUrl.Substring(0, Math.Min(50, databaseUrl.Length))}...");
+}
+if (!string.IsNullOrEmpty(databasePrivateUrl))
+{
+    Console.WriteLine($"DATABASE_PRIVATE_URL first 50 chars: {databasePrivateUrl.Substring(0, Math.Min(50, databasePrivateUrl.Length))}...");
+}
+
+Console.WriteLine("========================================\n");
+
 // Add services to the container
 builder.Services.AddControllers();
 
-// Database с PostGIS - Railway конфигурация
+// ===== DATABASE CONFIGURATION WITH DETAILED LOGGING =====
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
 {
-    // Railway предоставляет DATABASE_URL или DATABASE_PRIVATE_URL
-    var connectionString = Environment.GetEnvironmentVariable("DATABASE_URL")
-        ?? Environment.GetEnvironmentVariable("DATABASE_PRIVATE_URL")
-        ?? Environment.GetEnvironmentVariable("DATABASE_PUBLIC_URL")
-        ?? builder.Configuration.GetConnectionString("DefaultConnection")
-        ?? "Host=localhost;Database=drone_monitoring;Username=postgres;Password=postgres";
-
-    // НЕ добавляем SSL параметры - Railway URL уже содержит их!
-    // Просто используем строку как есть
-
+    string? connectionString = null;
+    string source = "unknown";
+    
+    // Пробуем получить connection string из разных источников
+    if (!string.IsNullOrEmpty(databaseUrl))
+    {
+        connectionString = databaseUrl;
+        source = "DATABASE_URL";
+    }
+    else if (!string.IsNullOrEmpty(databasePrivateUrl))
+    {
+        connectionString = databasePrivateUrl;
+        source = "DATABASE_PRIVATE_URL";
+    }
+    else if (!string.IsNullOrEmpty(databasePublicUrl))
+    {
+        connectionString = databasePublicUrl;
+        source = "DATABASE_PUBLIC_URL";
+    }
+    else
+    {
+        var configConnString = builder.Configuration.GetConnectionString("DefaultConnection");
+        if (!string.IsNullOrEmpty(configConnString))
+        {
+            connectionString = configConnString;
+            source = "appsettings.json";
+        }
+        else
+        {
+            connectionString = "Host=localhost;Database=drone_monitoring;Username=postgres;Password=postgres";
+            source = "fallback (localhost)";
+        }
+    }
+    
+    Console.WriteLine($"📊 Using connection string from: {source}");
+    
+    if (connectionString == null || connectionString.Length == 0)
+    {
+        Console.WriteLine("❌ CRITICAL: Connection string is EMPTY!");
+        throw new InvalidOperationException("DATABASE_URL is not configured. Please set DATABASE_URL environment variable.");
+    }
+    
+    // Fix postgres:// to postgresql:// if needed
+    if (connectionString.StartsWith("postgres://") && !connectionString.StartsWith("postgresql://"))
+    {
+        Console.WriteLine("🔧 Fixing postgres:// to postgresql://");
+        connectionString = connectionString.Replace("postgres://", "postgresql://");
+    }
+    
+    Console.WriteLine($"✅ Connection string validated (length: {connectionString.Length})");
+    Console.WriteLine($"   First 60 chars: {connectionString.Substring(0, Math.Min(60, connectionString.Length))}...\n");
+    
     options.UseNpgsql(connectionString, x => x.UseNetTopologySuite());
 });
 
@@ -38,15 +108,9 @@ builder.Services.AddSignalR(options =>
 builder.Services.AddHostedService<DroneSimulatorService>();
 
 // CORS - Railway конфигурация
-// Railway предоставляет RAILWAY_PUBLIC_DOMAIN для backend
-// Frontend будет на своём домене или поддомене
-var frontendUrl = Environment.GetEnvironmentVariable("FRONTEND_URL")
-    ?? Environment.GetEnvironmentVariable("RAILWAY_STATIC_URL")
-    ?? "http://localhost:5173";
-
+var frontendUrl = Environment.GetEnvironmentVariable("FRONTEND_URL") ?? "http://localhost:5173";
 var allowedOrigins = new List<string> { frontendUrl };
 
-// Добавляем Railway домены если они есть
 var railwayDomain = Environment.GetEnvironmentVariable("RAILWAY_PUBLIC_DOMAIN");
 if (!string.IsNullOrEmpty(railwayDomain))
 {
@@ -54,7 +118,6 @@ if (!string.IsNullOrEmpty(railwayDomain))
     allowedOrigins.Add($"http://{railwayDomain}");
 }
 
-// Для локальной разработки
 if (builder.Environment.IsDevelopment())
 {
     allowedOrigins.Add("http://localhost:5173");
@@ -74,28 +137,32 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline
 if (app.Environment.IsDevelopment())
 {
     app.UseDeveloperExceptionPage();
 }
 
-// Используем CORS
 app.UseCors("AppCors");
 
-// HTTPS редирект только если не на Railway (Railway делает это за нас)
 var isRailway = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("RAILWAY_ENVIRONMENT"));
 if (!isRailway)
 {
     app.UseHttpsRedirection();
 }
 
-// Маппинг Controllers и SignalR
 app.MapControllers();
 app.MapHub<DroneTrackingHub>("/droneHub");
 
-// Health check для Railway
-app.MapGet("/health", () => Results.Ok(new { status = "healthy", timestamp = DateTime.UtcNow }));
+app.MapGet("/health", () => Results.Ok(new { 
+    status = "healthy", 
+    timestamp = DateTime.UtcNow,
+    environment = new {
+        isRailway = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("RAILWAY_ENVIRONMENT")),
+        hasDatabaseUrl = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DATABASE_URL")),
+        hasPrivateUrl = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DATABASE_PRIVATE_URL")),
+        hasPublicUrl = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DATABASE_PUBLIC_URL"))
+    }
+}));
 
 // --- Инициализация БД ---
 using (var scope = app.Services.CreateScope())
@@ -105,27 +172,25 @@ using (var scope = app.Services.CreateScope())
     
     try
     {
-        // Применяем миграции или создаём БД
-        logger.LogInformation("Checking database...");
+        logger.LogInformation("🔍 Checking database connection...");
         
         if (app.Environment.IsDevelopment())
         {
-            // Development: пересоздаём БД
+            logger.LogInformation("🔨 Development mode: Recreating database...");
             await context.Database.EnsureDeletedAsync();
             await context.Database.EnsureCreatedAsync();
-            logger.LogInformation("Database recreated for development");
+            logger.LogInformation("✅ Database recreated for development");
         }
         else
         {
-            // Production: применяем миграции
+            logger.LogInformation("🚀 Production mode: Applying migrations...");
             await context.Database.MigrateAsync();
-            logger.LogInformation("Database migrations applied");
+            logger.LogInformation("✅ Database migrations applied");
         }
         
-        // Seed данные если БД пустая
         if (!await context.Drones.AnyAsync())
         {
-            logger.LogInformation("Seeding database...");
+            logger.LogInformation("🌱 Seeding database...");
             
             var drones = new List<Drone>();
             for (int i = 1; i <= 15; i++)
@@ -142,7 +207,6 @@ using (var scope = app.Services.CreateScope())
             context.Drones.AddRange(drones);
             await context.SaveChangesAsync();
             
-            // Зоны покрытия
             var geometryFactory = NtsGeometryServices.Instance.CreateGeometryFactory(srid: 4326);
             
             var zones = new[]
@@ -173,22 +237,25 @@ using (var scope = app.Services.CreateScope())
             logger.LogInformation("✅ Database seeded with {DroneCount} drones and {ZoneCount} zones", 
                 drones.Count, zones.Length);
         }
+        else
+        {
+            logger.LogInformation("ℹ️ Database already contains data, skipping seed");
+        }
     }
     catch (Exception ex)
     {
         logger.LogError(ex, "❌ Error occurred during database initialization");
-        throw; // Не запускаем приложение если БД недоступна
+        throw;
     }
 }
 
-var port = Environment.GetEnvironmentVariable("PORT") ?? "5000";
-app.Logger.LogInformation("🚁 Drone Monitoring API started");
-app.Logger.LogInformation("Environment: {Environment}", app.Environment.EnvironmentName);
-app.Logger.LogInformation("Port: {Port}", port);
-app.Logger.LogInformation("Allowed CORS Origins: {Origins}", string.Join(", ", allowedOrigins));
+var serverPort = Environment.GetEnvironmentVariable("PORT") ?? "5000";
+app.Logger.LogInformation("🚁 Drone Monitoring API starting...");
+app.Logger.LogInformation("📍 Environment: {Environment}", app.Environment.EnvironmentName);
+app.Logger.LogInformation("🔌 Port: {Port}", serverPort);
+app.Logger.LogInformation("🌐 Allowed CORS Origins: {Origins}", string.Join(", ", allowedOrigins));
 
-// Railway использует переменную PORT
-app.Run($"http://0.0.0.0:{port}");
+app.Run($"http://0.0.0.0:{serverPort}");
 
 static Polygon CreateGeodesicCirclePolygon(GeometryFactory factory, double centerLon, double centerLat, double radiusMeters)
 {
