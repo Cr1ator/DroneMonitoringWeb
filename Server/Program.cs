@@ -41,57 +41,17 @@ builder.Services.AddControllers();
 // ===== DATABASE CONFIGURATION WITH DETAILED LOGGING =====
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
 {
-    string? connectionString = null;
-    string source = "unknown";
+    // ИСПРАВЛЕНО: Читаем DATABASE_URL из переменных окружения
+    var connectionString = Environment.GetEnvironmentVariable("DATABASE_URL")
+        ?? Environment.GetEnvironmentVariable("DATABASE_PRIVATE_URL")
+        ?? builder.Configuration.GetConnectionString("DefaultConnection")
+        ?? "Host=localhost;Database=drone_monitoring;Username=postgres;Password=postgres";
     
-    // Пробуем получить connection string из разных источников
-    if (!string.IsNullOrEmpty(databaseUrl))
+    // Исправляем postgres:// на postgresql:// если нужно
+    if (!string.IsNullOrEmpty(connectionString) && connectionString.StartsWith("postgres://"))
     {
-        connectionString = databaseUrl;
-        source = "DATABASE_URL";
-    }
-    else if (!string.IsNullOrEmpty(databasePrivateUrl))
-    {
-        connectionString = databasePrivateUrl;
-        source = "DATABASE_PRIVATE_URL";
-    }
-    else if (!string.IsNullOrEmpty(databasePublicUrl))
-    {
-        connectionString = databasePublicUrl;
-        source = "DATABASE_PUBLIC_URL";
-    }
-    else
-    {
-        var configConnString = builder.Configuration.GetConnectionString("DefaultConnection");
-        if (!string.IsNullOrEmpty(configConnString))
-        {
-            connectionString = configConnString;
-            source = "appsettings.json";
-        }
-        else
-        {
-            connectionString = "Host=localhost;Database=drone_monitoring;Username=postgres;Password=postgres";
-            source = "fallback (localhost)";
-        }
-    }
-    
-    Console.WriteLine($"📊 Using connection string from: {source}");
-    
-    if (connectionString == null || connectionString.Length == 0)
-    {
-        Console.WriteLine("❌ CRITICAL: Connection string is EMPTY!");
-        throw new InvalidOperationException("DATABASE_URL is not configured. Please set DATABASE_URL environment variable.");
-    }
-    
-    // Fix postgres:// to postgresql:// if needed
-    if (connectionString.StartsWith("postgres://") && !connectionString.StartsWith("postgresql://"))
-    {
-        Console.WriteLine("🔧 Fixing postgres:// to postgresql://");
         connectionString = connectionString.Replace("postgres://", "postgresql://");
     }
-    
-    Console.WriteLine($"✅ Connection string validated (length: {connectionString.Length})");
-    Console.WriteLine($"   First 60 chars: {connectionString.Substring(0, Math.Min(60, connectionString.Length))}...\n");
     
     options.UseNpgsql(connectionString, x => x.UseNetTopologySuite());
 });
