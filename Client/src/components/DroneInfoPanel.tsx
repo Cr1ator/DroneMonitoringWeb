@@ -179,14 +179,11 @@ export const DroneInfoPanel: React.FC<DroneInfoPanelProps> = ({
   return (
     <div
       className="
-      fixed bottom-2 right-2 left-2
-      md:bottom-4 md:right-4 md:left-auto
-      w-auto md:w-96
-      max-h-[80vh] md:max-h-[calc(100vh-6rem)]
+      h-full w-full
+      lg:h-auto lg:w-auto
       military-panel rounded-lg shadow-2xl
       animate-slideInRight
       flex flex-col overflow-hidden
-      z-40
     "
     >
       {/* Заголовок */}
@@ -243,7 +240,7 @@ export const DroneInfoPanel: React.FC<DroneInfoPanelProps> = ({
       </div>
 
       {/* Контейнер для контента с общей прокруткой */}
-      <div className="grow overflow-y-auto subtle-scroll">
+      <div className="grow overflow-y-auto subtle-scroll max-h-[calc(100vh-200px)] lg:max-h-[500px]">
         {/* Текущие параметры */}
         <div className="p-3 md:p-4 bg-gray-900/30">
           <h4 className="text-xs font-semibold text-gray-400 mb-2 md:mb-3 uppercase">
@@ -343,19 +340,13 @@ export const DroneInfoPanel: React.FC<DroneInfoPanelProps> = ({
         )}
 
         {/* История полётов */}
-        <div
-          className="p-3 md:p-4 overflow-y-auto military-scroll border-t border-green-500/20"
-          style={{ minHeight: "200px", maxHeight: "256px" }}
-        >
+        <div className="p-3 md:p-4 border-t border-green-500/20">
           <h4 className="text-xs font-semibold text-gray-400 mb-2 md:mb-3 uppercase">
             История полётов (последние 20)
           </h4>
 
           {loading ? (
-            <div
-              className="flex items-center justify-center"
-              style={{ height: "150px" }}
-            >
+            <div className="flex items-center justify-center py-8">
               <div className="text-center text-gray-500">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-400 mx-auto"></div>
                 <p className="mt-2 text-sm">Загрузка...</p>

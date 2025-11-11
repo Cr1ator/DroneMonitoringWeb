@@ -19,7 +19,7 @@ import { defaults as defaultControls } from "ol/control";
 import * as signalR from "@microsoft/signalr";
 import { TbDrone } from "react-icons/tb";
 import { GiDeliveryDrone, GiRadioactive } from "react-icons/gi";
-import { MdWarning, MdClose } from "react-icons/md";
+import { MdWarning, MdClose, MdSettings } from "react-icons/md";
 import { HiOutlineFilter, HiOutlineViewList } from "react-icons/hi";
 import ReactDOMServer from "react-dom/server";
 import type {
@@ -108,12 +108,12 @@ const AlarmPanel: React.FC<{
   );
 
   return (
-    <div className="fixed top-16 left-1/2 transform -translate-x-1/2 z-[60] w-auto max-w-sm md:max-w-lg px-4">
-      <div className="military-panel border-2 border-red-500 bg-red-900/95 backdrop-blur-sm px-4 py-3 rounded-lg shadow-2xl animate-pulse">
-        <div className="flex items-start space-x-3">
-          <GiRadioactive className="w-7 h-7 text-red-400 animate-spin flex-shrink-0 mt-0.5" />
+    <div className="fixed top-2 left-1/2 transform -translate-x-1/2 z-[60] w-auto max-w-sm md:max-w-lg px-2 md:px-4">
+      <div className="military-panel border-2 border-red-500 bg-red-900/95 backdrop-blur-sm px-3 py-2 md:px-4 md:py-3 rounded-lg shadow-2xl animate-pulse">
+        <div className="flex items-start space-x-2 md:space-x-3">
+          <GiRadioactive className="w-6 h-6 md:w-7 md:h-7 text-red-400 animate-spin flex-shrink-0 mt-0.5" />
           <div className="flex-grow min-w-0">
-            <div className="text-red-200 font-bold text-base md:text-lg mb-1">
+            <div className="text-red-200 font-bold text-sm md:text-base mb-1">
               ⚠️ ТРЕВОГА!
             </div>
             <div className="text-red-300 text-xs md:text-sm mb-2">
@@ -136,10 +136,10 @@ const AlarmPanel: React.FC<{
           </div>
           <button
             onClick={onDismiss}
-            className="military-button p-2 rounded text-red-400 hover:text-white flex-shrink-0 transition-colors"
+            className="military-button p-1.5 md:p-2 rounded text-red-400 hover:text-white flex-shrink-0 transition-colors"
             title="Закрыть"
           >
-            <MdClose className="w-5 h-5" />
+            <MdClose className="w-4 h-4 md:w-5 md:h-5" />
           </button>
         </div>
       </div>
@@ -173,6 +173,7 @@ export const DroneMap: React.FC = () => {
   const [isConnected, setIsConnected] = useState(false);
   const [showDroneList, setShowDroneList] = useState(true);
   const [showFilterPanel, setShowFilterPanel] = useState(false);
+  const [showMapControls, setShowMapControls] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [historyDroneId, setHistoryDroneId] = useState<number | null>(null);
   const [tooltip, setTooltip] = useState<{
@@ -752,12 +753,13 @@ export const DroneMap: React.FC = () => {
   const closeAllMobilePanels = () => {
     setShowDroneList(false);
     setShowFilterPanel(false);
+    setShowMapControls(false);
   };
 
   return (
     <div className="flex h-screen bg-gray-900 military-grid relative">
       {/* Backdrop для мобильных панелей */}
-      {(showDroneList || showFilterPanel) && (
+      {(showDroneList || showFilterPanel || showMapControls) && (
         <div
           className="fixed inset-0 bg-black/60 z-30 lg:hidden"
           onClick={closeAllMobilePanels}
@@ -795,7 +797,7 @@ export const DroneMap: React.FC = () => {
           <DroneTooltip drone={tooltip.drone} x={tooltip.x} y={tooltip.y} />
         )}
 
-        {/* Окно тревоги - исправленное позиционирование */}
+        {/* Окно тревоги */}
         {!isAlarmDismissed && activeZones.length > 0 && (
           <AlarmPanel
             activeZones={activeZones}
@@ -803,14 +805,15 @@ export const DroneMap: React.FC = () => {
           />
         )}
 
-        {/* Мобильные кнопки управления панелями */}
-        <div className="absolute top-4 left-4 right-4 flex justify-between items-start z-20 lg:hidden">
+        {/* Мобильные кнопки управления - ПЕРЕМЕЩЕНЫ В НИЗ СЛЕВА */}
+        <div className="absolute bottom-4 left-4 flex flex-col space-y-2 z-20 lg:hidden">
           <button
             onClick={() => {
               setShowFilterPanel(!showFilterPanel);
               setShowDroneList(false);
+              setShowMapControls(false);
             }}
-            className="military-button p-3 rounded-lg text-green-400 hover:text-white shadow-xl backdrop-blur-sm bg-gray-900/80"
+            className="military-button p-3 rounded-lg text-green-400 hover:text-white shadow-xl backdrop-blur-sm bg-gray-900/90"
             title="Фильтры"
           >
             <HiOutlineFilter className="w-6 h-6" />
@@ -818,37 +821,78 @@ export const DroneMap: React.FC = () => {
 
           <button
             onClick={() => {
-              setShowDroneList(!showDroneList);
+              setShowMapControls(!showMapControls);
+              setShowDroneList(false);
               setShowFilterPanel(false);
             }}
-            className="military-button p-3 rounded-lg text-green-400 hover:text-white shadow-xl backdrop-blur-sm bg-gray-900/80"
+            className="military-button p-3 rounded-lg text-green-400 hover:text-white shadow-xl backdrop-blur-sm bg-gray-900/90"
+            title="Настройки карты"
+          >
+            <MdSettings className="w-6 h-6" />
+          </button>
+        </div>
+
+        {/* Кнопка списка дронов справа внизу на мобильных */}
+        <div className="absolute bottom-4 right-4 z-20 lg:hidden">
+          <button
+            onClick={() => {
+              setShowDroneList(!showDroneList);
+              setShowFilterPanel(false);
+              setShowMapControls(false);
+            }}
+            className="military-button p-3 rounded-lg text-green-400 hover:text-white shadow-xl backdrop-blur-sm bg-gray-900/90"
             title="Список дронов"
           >
             <HiOutlineViewList className="w-6 h-6" />
           </button>
         </div>
 
-        {/* MapControls - только на десктопе */}
-        <MapControls
-          mapType={mapType}
-          showZones={showZones}
-          showTrajectories={showTrajectories}
-          onToggleMapType={toggleMapType}
-          onToggleZones={() => setShowZones(!showZones)}
-          onToggleTrajectories={() => setShowTrajectories(!showTrajectories)}
-          onCenterMap={handleCenterMap}
-          onResetZoom={handleResetZoom}
-        />
-
-        {/* DroneInfoPanel - адаптивный */}
-        {selectedDrone && (
-          <DroneInfoPanel
-            drone={selectedDrone}
-            onClose={() => {
-              setSelectedDrone(null);
-              clearAllTrajectories();
-            }}
+        {/* MapControls - выдвижная панель снизу на мобильных, статичная на десктопе */}
+        <div
+          className={`
+          fixed lg:absolute
+          bottom-0 left-0 right-0 lg:bottom-4 lg:left-4 lg:right-auto
+          transform transition-transform duration-300 ease-in-out
+          z-40 lg:z-10
+          ${
+            showMapControls
+              ? "translate-y-0"
+              : "translate-y-full lg:translate-y-0"
+          }
+        `}
+        >
+          <MapControls
+            mapType={mapType}
+            showZones={showZones}
+            showTrajectories={showTrajectories}
+            onToggleMapType={toggleMapType}
+            onToggleZones={() => setShowZones(!showZones)}
+            onToggleTrajectories={() => setShowTrajectories(!showTrajectories)}
+            onCenterMap={handleCenterMap}
+            onResetZoom={handleResetZoom}
+            onClose={() => setShowMapControls(false)}
           />
+        </div>
+
+        {/* DroneInfoPanel - ИСПРАВЛЕНО ПОЗИЦИОНИРОВАНИЕ */}
+        {selectedDrone && (
+          <div
+            className={`
+            fixed inset-0
+            lg:absolute lg:inset-auto
+            lg:bottom-4 lg:left-1/2 lg:transform lg:-translate-x-1/2
+            lg:max-w-md
+            z-50 lg:z-30
+          `}
+          >
+            <DroneInfoPanel
+              drone={selectedDrone}
+              onClose={() => {
+                setSelectedDrone(null);
+                clearAllTrajectories();
+              }}
+            />
+          </div>
         )}
 
         {/* Кнопка показа списка на десктопе */}
@@ -900,7 +944,6 @@ export const DroneMap: React.FC = () => {
             selectedDrone={selectedDrone}
             onDroneSelect={(drone) => {
               handleDroneSelect(drone, true);
-              // Закрываем панель на мобильных после выбора
               if (window.innerWidth < 1024) {
                 setShowDroneList(false);
               }

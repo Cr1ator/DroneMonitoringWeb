@@ -1,7 +1,8 @@
 import React from "react";
 import { BiSolidMap } from "react-icons/bi";
 import { HiArrowTrendingUp } from "react-icons/hi2";
-import { PiMapPinSimpleAreaBold, PiMagnifyingGlassBold } from "react-icons/pi"; // ✅ Добавлены новые иконки
+import { PiMapPinSimpleAreaBold, PiMagnifyingGlassBold } from "react-icons/pi";
+import { MdClose } from "react-icons/md";
 
 interface MapControlsProps {
   mapType: "osm" | "satellite";
@@ -12,6 +13,7 @@ interface MapControlsProps {
   onToggleTrajectories: () => void;
   onCenterMap: () => void;
   onResetZoom: () => void;
+  onClose?: () => void;
 }
 
 export const MapControls: React.FC<MapControlsProps> = ({
@@ -23,25 +25,38 @@ export const MapControls: React.FC<MapControlsProps> = ({
   onToggleTrajectories,
   onCenterMap,
   onResetZoom,
+  onClose,
 }) => {
   return (
-    <div className="absolute bottom-4 left-4 military-panel rounded-lg shadow-lg p-4 min-w-[200px] z-10">
-      <h3 className="text-sm font-semibold text-gray-400 mb-3 flex items-center uppercase tracking-wider">
-        <svg
-          className="w-4 h-4 mr-2"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"
-          />
-        </svg>
-        Настройки карты
-      </h3>
+    <div className="military-panel rounded-t-lg lg:rounded-lg shadow-lg p-4 min-w-full lg:min-w-[200px] max-w-full lg:max-w-xs">
+      {/* Заголовок с кнопкой закрытия для мобильных */}
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-sm font-semibold text-gray-400 flex items-center uppercase tracking-wider">
+          <svg
+            className="w-4 h-4 mr-2"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"
+            />
+          </svg>
+          Настройки карты
+        </h3>
+        {onClose && (
+          <button
+            onClick={onClose}
+            className="lg:hidden military-button p-1.5 rounded text-green-400 hover:text-white"
+            title="Закрыть"
+          >
+            <MdClose className="w-5 h-5" />
+          </button>
+        )}
+      </div>
 
       <div className="space-y-3">
         {/* Тип карты */}
@@ -204,8 +219,7 @@ export const MapControls: React.FC<MapControlsProps> = ({
               className="px-2 py-2 military-button rounded text-green-400 text-xs font-semibold uppercase tracking-wider hover:bg-green-500/20 flex items-center justify-center"
               title="Центрировать карту на Минске"
             >
-              <PiMapPinSimpleAreaBold className="w-4 h-4 mr-1" />{" "}
-              {/* ✅ Заменена эмодзи */}
+              <PiMapPinSimpleAreaBold className="w-4 h-4 mr-1" />
               Центр
             </button>
             <button
@@ -213,8 +227,7 @@ export const MapControls: React.FC<MapControlsProps> = ({
               className="px-2 py-2 military-button rounded text-green-400 text-xs font-semibold uppercase tracking-wider hover:bg-green-500/20 flex items-center justify-center"
               title="Сбросить масштаб"
             >
-              <PiMagnifyingGlassBold className="w-4 h-4 mr-1" />{" "}
-              {/* ✅ Заменена эмодзи */}
+              <PiMagnifyingGlassBold className="w-4 h-4 mr-1" />
               Сброс
             </button>
           </div>
