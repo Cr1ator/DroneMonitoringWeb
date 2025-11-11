@@ -13,18 +13,16 @@ builder.Services.AddControllers();
 // Database с PostGIS - Railway конфигурация
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
 {
-    // Railway предоставляет DATABASE_URL или DATABASE_PUBLIC_URL
+    // Railway предоставляет DATABASE_URL или DATABASE_PRIVATE_URL
     var connectionString = Environment.GetEnvironmentVariable("DATABASE_URL")
+        ?? Environment.GetEnvironmentVariable("DATABASE_PRIVATE_URL")
         ?? Environment.GetEnvironmentVariable("DATABASE_PUBLIC_URL")
         ?? builder.Configuration.GetConnectionString("DefaultConnection")
         ?? "Host=localhost;Database=drone_monitoring;Username=postgres;Password=postgres";
-    
-    // Railway PostgreSQL требует SSL
-    if (connectionString.Contains("railway"))
-    {
-        connectionString += ";SSL Mode=Require;Trust Server Certificate=true";
-    }
-    
+
+    // НЕ добавляем SSL параметры - Railway URL уже содержит их!
+    // Просто используем строку как есть
+
     options.UseNpgsql(connectionString, x => x.UseNetTopologySuite());
 });
 
