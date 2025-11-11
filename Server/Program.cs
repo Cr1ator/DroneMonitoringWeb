@@ -127,20 +127,12 @@ using (var scope = app.Services.CreateScope())
     {
         logger.LogInformation("🔍 Checking database connection...");
         
-        if (app.Environment.IsDevelopment())
-        {
-            logger.LogInformation("🔨 Development mode: Recreating database...");
-            await context.Database.EnsureDeletedAsync();
-            await context.Database.EnsureCreatedAsync();
-            logger.LogInformation("✅ Database recreated for development");
-        }
-        else
-        {
-            logger.LogInformation("🚀 Production mode: Ensuring database exists...");
-            // Используем EnsureCreated вместо Migrate, т.к. миграций нет
-            await context.Database.EnsureCreatedAsync();
-            logger.LogInformation("✅ Database created/verified");
-        }
+        // ВРЕМЕННО: Всегда пересоздаём схему чтобы таблицы точно создались
+        // TODO: После первого успешного деплоя, создать миграции и использовать Migrate()
+        logger.LogInformation("🔨 Recreating database schema...");
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        logger.LogInformation("✅ Database schema created");
         
         if (!await context.Drones.AnyAsync())
         {
