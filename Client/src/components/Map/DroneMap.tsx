@@ -174,7 +174,6 @@ const AlarmPanel: React.FC<{
   );
 };
 
-// <-- ИЗМЕНЕНО: Стиль для курсора-прицела (только кружок, без линии) -->
 const rulerCursorStyle = new Style({
   image: new CircleStyle({
     radius: 6,
@@ -194,7 +193,6 @@ export const DroneMap: React.FC = () => {
   const rulerInteractionsRef = useRef<{
     draw?: Draw;
     modify?: Modify;
-    select?: Select;
   }>({});
   const rulerFeatureRef = useRef<Feature | null>(null);
 
@@ -863,7 +861,6 @@ export const DroneMap: React.FC = () => {
     });
   }, []);
 
-  // <-- ИЗМЕНЕНО: Основной useEffect для управления линейкой -->
   useEffect(() => {
     const map = mapInstanceRef.current;
     if (!map) return;
@@ -873,8 +870,6 @@ export const DroneMap: React.FC = () => {
         map.removeInteraction(rulerInteractionsRef.current.draw);
       if (rulerInteractionsRef.current.modify)
         map.removeInteraction(rulerInteractionsRef.current.modify);
-      if (rulerInteractionsRef.current.select)
-        map.removeInteraction(rulerInteractionsRef.current.select);
       rulerInteractionsRef.current = {};
     };
 
@@ -897,7 +892,7 @@ export const DroneMap: React.FC = () => {
         if (!source) return;
 
         const draw = new Draw({
-          source: source, // Рисуем на временном источнике
+          source: source,
           type: "Point",
           style: rulerCursorStyle,
         });
@@ -906,16 +901,13 @@ export const DroneMap: React.FC = () => {
           const pointGeom = event.feature.getGeometry() as Point;
           const coord = pointGeom.getCoordinates();
 
-          // Удаляем временную точку
           source.removeFeature(event.feature);
 
           if (!rulerFeatureRef.current) {
-            // Создаем новую линию, если ее нет
             const newLine = new LineString([coord]);
             rulerFeatureRef.current = new Feature(newLine);
             source.addFeature(rulerFeatureRef.current);
           } else {
-            // Добавляем точку к существующей линии
             const lineGeom =
               rulerFeatureRef.current.getGeometry() as LineString;
             lineGeom.appendCoordinate(coord);
@@ -929,45 +921,15 @@ export const DroneMap: React.FC = () => {
         const source = rulerLayerRef.current.getSource();
         if (!source) return;
 
-        const modify = new Modify({ source: source, style: createRulerStyle });
-        const select = new Select({
-          condition: click,
-          style: createRulerVertexStyle,
-          layers: [rulerLayerRef.current],
-        });
+        const modify = new Modify({ source: source });
 
         modify.on("modifyend", (event) => {
           const feature = event.features.getArray()[0];
           if (feature) updateRulerMeasurements(feature);
         });
 
-        select.on("select", (event) => {
-          if (event.selected.length > 0) {
-            const selectedFeature = event.selected[0];
-            const geometry = selectedFeature.getGeometry();
-            if (geometry instanceof Point) {
-              const lineFeature = rulerFeatureRef.current;
-              if (!lineFeature) return;
-              const lineGeom = lineFeature.getGeometry() as LineString;
-              const coords = lineGeom.getCoordinates();
-              if (coords.length <= 2) {
-                select.getFeatures().clear();
-                return;
-              }
-              const selectedCoord = geometry.getCoordinates();
-              const newCoords = coords.filter(
-                (c) => c[0] !== selectedCoord[0] || c[1] !== selectedCoord[1]
-              );
-              lineGeom.setCoordinates(newCoords);
-              updateRulerMeasurements(lineFeature);
-            }
-            select.getFeatures().clear();
-          }
-        });
-
         map.addInteraction(modify);
-        map.addInteraction(select);
-        rulerInteractionsRef.current = { modify, select };
+        rulerInteractionsRef.current.modify = modify;
       }
     } else {
       cleanupInteractions();
@@ -985,35 +947,53 @@ export const DroneMap: React.FC = () => {
     };
   }, [isRulerActive, rulerMode, updateRulerMeasurements]);
 
+  // <-- ИЗМЕНЕНО: Новый useEffect для удаления и добавления вершин по клику -->
   useEffect(() => {
     const map = mapInstanceRef.current;
-    if (!map) return;
+    if (!map || rulerMode !== "modifying") {
+      return;
+    }
 
-    const handleMapClick = (event: any) => {
-      if (
-        !isRulerActiveRef.current ||
-        !rulerFeatureRef.current ||
-        rulerMode !== "modifying"
-      )
-        return;
+    const handleModifyClick = (event: any) => {
+      if (!rulerFeatureRef.current) return;
 
-      const featureAtPixel = map.forEachFeatureAtPixel(event.pixel, (f) => f, {
-        layerFilter: (l) => l === rulerLayerRef.current,
-        hitTolerance: 5,
-      });
-      if (featureAtPixel) return;
+      const clickedPixel = event.pixel;
+      const hitTolerance = 10;
 
       const lineGeom = rulerFeatureRef.current.getGeometry() as LineString;
+      const coords = lineGeom.getCoordinates();
+
+      // Сначала проверяем, кликнули ли мы на существующую вершину для удаления
+      for (const coord of coords) {
+        const vertexPixel = map.getPixelFromCoordinate(coord);
+        if (!vertexPixel) continue;
+
+        const distance = Math.sqrt(
+          Math.pow(clickedPixel[0] - vertexPixel[0], 2) +
+            Math.pow(clickedPixel[1] - vertexPixel[1], 2)
+        );
+
+        if (distance <= hitTolerance) {
+          if (coords.length > 2) {
+            const newCoords = coords.filter(
+              (c) => c[0] !== coord[0] || c[1] !== coord[1]
+            );
+            lineGeom.setCoordinates(newCoords);
+            updateRulerMeasurements(rulerFeatureRef.current);
+          }
+          return; // Выходим, так как действие (удаление) выполнено
+        }
+      }
+
+      // Если не попали в вершину, проверяем, кликнули ли на линию для добавления новой точки
       const closestPoint = lineGeom.getClosestPoint(event.coordinate);
-      const distance = Math.sqrt(
+      const distanceToLine = Math.sqrt(
         Math.pow(closestPoint[0] - event.coordinate[0], 2) +
           Math.pow(closestPoint[1] - event.coordinate[1], 2)
       );
 
-      const pixelTolerance = 10;
       const resolution = map.getView().getResolution() || 1;
-      if (distance < pixelTolerance * resolution) {
-        const coords = lineGeom.getCoordinates();
+      if (distanceToLine < hitTolerance * resolution) {
         let insertIndex = -1;
         let minSegmentDist = Infinity;
 
@@ -1043,10 +1023,10 @@ export const DroneMap: React.FC = () => {
       }
     };
 
-    map.on("click", handleMapClick);
+    map.on("click", handleModifyClick);
 
     return () => {
-      map.un("click", handleMapClick);
+      map.un("click", handleModifyClick);
     };
   }, [rulerMode, updateRulerMeasurements]);
 
