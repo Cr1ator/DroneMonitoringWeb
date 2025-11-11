@@ -878,11 +878,12 @@ export const DroneMap: React.FC = () => {
         {selectedDrone && (
           <div
             className={`
-            fixed inset-0
-            lg:absolute lg:inset-auto
-            lg:bottom-4 lg:left-1/2 lg:transform lg:-translate-x-1/2
-            lg:max-w-md
-            z-50 lg:z-30
+            fixed
+            bottom-4 right-4
+            md:bottom-6 md:right-6
+            z-50
+            max-w-[calc(100vw-2rem)]
+            md:max-w-md
           `}
           >
             <DroneInfoPanel
