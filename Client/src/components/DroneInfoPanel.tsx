@@ -13,7 +13,6 @@ import {
 } from "chart.js";
 import { Line } from "react-chartjs-2";
 
-// Регистрация компонентов Chart.js
 ChartJS.register(
   CategoryScale,
   LinearScale,
@@ -178,32 +177,43 @@ export const DroneInfoPanel: React.FC<DroneInfoPanelProps> = ({
   };
 
   return (
-    <div className="absolute bottom-4 right-4 w-96 military-panel rounded-lg shadow-2xl animate-slideInRight max-h-[calc(100vh-6rem)] flex flex-col overflow-hidden">
-      {/* Заголовок (статичный) */}
+    <div
+      className="
+      fixed bottom-2 right-2 left-2
+      md:bottom-4 md:right-4 md:left-auto
+      w-auto md:w-96
+      max-h-[80vh] md:max-h-[calc(100vh-6rem)]
+      military-panel rounded-lg shadow-2xl
+      animate-slideInRight
+      flex flex-col overflow-hidden
+      z-40
+    "
+    >
+      {/* Заголовок */}
       <div
-        className={`px-4 py-3 shrink-0 ${
+        className={`px-3 py-2 md:px-4 md:py-3 shrink-0 ${
           drone.status === "Active"
             ? "bg-green-500/20 border-green-500"
             : "bg-red-500/20 border-red-500"
         } border-b-2`}
       >
         <div className="flex justify-between items-center">
-          <h3 className="text-lg font-bold flex items-center text-white">
+          <h3 className="text-base md:text-lg font-bold flex items-center text-white">
             <svg
-              className="w-5 h-5 mr-2"
+              className="w-4 h-4 md:w-5 md:h-5 mr-2"
               fill="currentColor"
               viewBox="0 0 20 20"
             >
               <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
             </svg>
-            {drone.name}
+            <span className="truncate">{drone.name}</span>
           </h3>
           <button
             onClick={onClose}
-            className="text-white hover:text-gray-200 transition-colors"
+            className="text-white hover:text-gray-200 transition-colors ml-2"
           >
             <svg
-              className="w-6 h-6"
+              className="w-5 h-5 md:w-6 md:h-6"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -218,7 +228,7 @@ export const DroneInfoPanel: React.FC<DroneInfoPanelProps> = ({
           </button>
         </div>
         <div
-          className={`text-sm mt-1 font-semibold ${
+          className={`text-xs md:text-sm mt-1 font-semibold ${
             drone.status === "Active"
               ? "text-green-400 status-active"
               : "text-red-400"
@@ -235,48 +245,48 @@ export const DroneInfoPanel: React.FC<DroneInfoPanelProps> = ({
       {/* Контейнер для контента с общей прокруткой */}
       <div className="grow overflow-y-auto subtle-scroll">
         {/* Текущие параметры */}
-        <div className="p-4 bg-gray-900/30">
-          <h4 className="text-xs font-semibold text-gray-400 mb-3 uppercase">
+        <div className="p-3 md:p-4 bg-gray-900/30">
+          <h4 className="text-xs font-semibold text-gray-400 mb-2 md:mb-3 uppercase">
             Текущие параметры
           </h4>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="bg-gray-800/50 p-3 rounded border border-green-500/20">
+          <div className="grid grid-cols-2 gap-2 md:gap-3">
+            <div className="bg-gray-800/50 p-2 md:p-3 rounded border border-green-500/20">
               <div className="text-xs text-gray-500">Координаты</div>
-              <div className="text-sm font-medium mt-1 tech-font text-green-400">
+              <div className="text-xs md:text-sm font-medium mt-1 tech-font text-green-400 break-all">
                 {drone.latitude.toFixed(6)}, {drone.longitude.toFixed(6)}
               </div>
             </div>
-            <div className="bg-gray-800/50 p-3 rounded border border-green-500/20">
+            <div className="bg-gray-800/50 p-2 md:p-3 rounded border border-green-500/20">
               <div className="text-xs text-gray-500">Высота</div>
-              <div className="text-sm font-medium mt-1 tech-font text-green-400">
+              <div className="text-xs md:text-sm font-medium mt-1 tech-font text-green-400">
                 {formatAltitude(drone.altitude)}
               </div>
             </div>
-            <div className="bg-gray-800/50 p-3 rounded border border-green-500/20">
+            <div className="bg-gray-800/50 p-2 md:p-3 rounded border border-green-500/20">
               <div className="text-xs text-gray-500">Скорость</div>
-              <div className="text-sm font-medium mt-1 tech-font text-green-400">
+              <div className="text-xs md:text-sm font-medium mt-1 tech-font text-green-400">
                 {formatSpeed(drone.speed)}
               </div>
             </div>
-            <div className="bg-gray-800/50 p-3 rounded border border-green-500/20">
+            <div className="bg-gray-800/50 p-2 md:p-3 rounded border border-green-500/20">
               <div className="text-xs text-gray-500">Курс</div>
-              <div className="text-sm font-medium mt-1 tech-font text-green-400">
+              <div className="text-xs md:text-sm font-medium mt-1 tech-font text-green-400">
                 {formatHeading(drone.heading)}
               </div>
             </div>
           </div>
 
           {/* Дополнительная информация */}
-          <div className="mt-3 pt-3 border-t border-green-500/20">
-            <div className="flex justify-between items-center text-sm">
+          <div className="mt-2 md:mt-3 pt-2 md:pt-3 border-t border-green-500/20">
+            <div className="flex justify-between items-center text-xs md:text-sm">
               <span className="text-gray-500">Частота:</span>
               <span className="font-medium tech-font text-green-400">
                 {drone.frequency}
               </span>
             </div>
-            <div className="flex justify-between items-center text-sm mt-2">
+            <div className="flex justify-between items-center text-xs md:text-sm mt-2">
               <span className="text-gray-500">Последнее обновление:</span>
-              <span className="font-medium tech-font text-green-400">
+              <span className="font-medium tech-font text-green-400 text-right">
                 {formatDate(drone.lastSeen)}
               </span>
             </div>
@@ -285,14 +295,14 @@ export const DroneInfoPanel: React.FC<DroneInfoPanelProps> = ({
 
         {/* Графики */}
         {history.length > 0 && (
-          <div className="p-4 bg-gray-900/50 border-t border-green-500/20 space-y-3">
+          <div className="p-3 md:p-4 bg-gray-900/50 border-t border-green-500/20 space-y-3">
             {/* График высоты */}
-            <div className="bg-gray-800/50 rounded p-3 border border-green-500/20">
+            <div className="bg-gray-800/50 rounded p-2 md:p-3 border border-green-500/20">
               <div className="flex items-center justify-between mb-2">
                 <h4 className="text-xs text-gray-400 uppercase font-semibold">
                   График высоты
                 </h4>
-                <div className="flex items-center space-x-3 text-xs tech-font">
+                <div className="flex items-center space-x-2 md:space-x-3 text-xs tech-font">
                   <span className="text-green-400">
                     Макс:{" "}
                     {Math.max(...history.map((h) => h.altitude)).toFixed(0)}м
@@ -303,18 +313,18 @@ export const DroneInfoPanel: React.FC<DroneInfoPanelProps> = ({
                   </span>
                 </div>
               </div>
-              <div className="h-24">
+              <div className="h-20 md:h-24">
                 <Line data={altitudeChartData} options={chartOptions} />
               </div>
             </div>
 
             {/* График скорости */}
-            <div className="bg-gray-800/50 rounded p-3 border border-green-500/20">
+            <div className="bg-gray-800/50 rounded p-2 md:p-3 border border-green-500/20">
               <div className="flex items-center justify-between mb-2">
                 <h4 className="text-xs text-gray-400 uppercase font-semibold">
                   График скорости
                 </h4>
-                <div className="flex items-center space-x-3 text-xs tech-font">
+                <div className="flex items-center space-x-2 md:space-x-3 text-xs tech-font">
                   <span className="text-yellow-400">
                     Макс: {Math.max(...history.map((h) => h.speed)).toFixed(1)}
                     м/с
@@ -325,25 +335,26 @@ export const DroneInfoPanel: React.FC<DroneInfoPanelProps> = ({
                   </span>
                 </div>
               </div>
-              <div className="h-24">
+              <div className="h-20 md:h-24">
                 <Line data={speedChartData} options={chartOptions} />
               </div>
             </div>
           </div>
         )}
 
+        {/* История полётов */}
         <div
-          className="p-4 overflow-y-auto military-scroll border-t border-green-500/20"
-          style={{ minHeight: "256px", maxHeight: "256px" }}
+          className="p-3 md:p-4 overflow-y-auto military-scroll border-t border-green-500/20"
+          style={{ minHeight: "200px", maxHeight: "256px" }}
         >
-          <h4 className="text-xs font-semibold text-gray-400 mb-3 uppercase">
+          <h4 className="text-xs font-semibold text-gray-400 mb-2 md:mb-3 uppercase">
             История полётов (последние 20)
           </h4>
 
           {loading ? (
             <div
               className="flex items-center justify-center"
-              style={{ height: "200px" }}
+              style={{ height: "150px" }}
             >
               <div className="text-center text-gray-500">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-400 mx-auto"></div>
@@ -357,11 +368,11 @@ export const DroneInfoPanel: React.FC<DroneInfoPanelProps> = ({
                   key={`${point.timestamp}-${index}`}
                   className="bg-gray-800/50 p-2 rounded text-xs border border-green-500/10 hover:border-green-500/30 transition-colors"
                 >
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-400 tech-font">
+                  <div className="flex justify-between items-center flex-wrap gap-1">
+                    <span className="text-gray-400 tech-font text-xs">
                       {formatDate(point.timestamp)}
                     </span>
-                    <div className="flex space-x-3">
+                    <div className="flex space-x-2 md:space-x-3 text-xs">
                       <span title="Высота" className="text-green-400 tech-font">
                         ↑{formatAltitude(point.altitude)}
                       </span>
@@ -376,7 +387,7 @@ export const DroneInfoPanel: React.FC<DroneInfoPanelProps> = ({
                       </span>
                     </div>
                   </div>
-                  <div className="text-gray-500 mt-1 tech-font">
+                  <div className="text-gray-500 mt-1 tech-font text-xs break-all">
                     {point.latitude.toFixed(6)}, {point.longitude.toFixed(6)}
                   </div>
                 </div>

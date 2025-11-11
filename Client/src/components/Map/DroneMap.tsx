@@ -19,7 +19,8 @@ import { defaults as defaultControls } from "ol/control";
 import * as signalR from "@microsoft/signalr";
 import { TbDrone } from "react-icons/tb";
 import { GiDeliveryDrone, GiRadioactive } from "react-icons/gi";
-import { MdWarning } from "react-icons/md";
+import { MdWarning, MdClose } from "react-icons/md";
+import { HiOutlineFilter, HiOutlineViewList } from "react-icons/hi";
 import ReactDOMServer from "react-dom/server";
 import type {
   Drone,
@@ -35,14 +36,12 @@ import { MapControls } from "./../MapControls";
 import { DroneList } from "../DroneList";
 import { DroneHistoryPanel } from "../DroneHistoryPanel";
 
-// ✅ ИЗМЕНЕНИЕ #1: Определяем тип для новой информации о зонах
 interface ActiveZoneInfo {
   zoneId: number;
   zoneName: string;
   droneCount: number;
 }
 
-// Компонент Tooltip для дронов (без изменений)
 const DroneTooltip: React.FC<{
   drone: Drone;
   x: number;
@@ -50,7 +49,7 @@ const DroneTooltip: React.FC<{
 }> = ({ drone, x, y }) => {
   return (
     <div
-      className="drone-tooltip"
+      className="drone-tooltip hidden lg:block"
       style={{
         left: `${x + 15}px`,
         top: `${y + 15}px`,
@@ -97,7 +96,6 @@ const DroneTooltip: React.FC<{
   );
 };
 
-// ✅ ИЗМЕНЕНИЕ #2: Полностью переписанная панель тревоги для отображения деталей
 const AlarmPanel: React.FC<{
   activeZones: ActiveZoneInfo[];
   onDismiss: () => void;
@@ -110,34 +108,38 @@ const AlarmPanel: React.FC<{
   );
 
   return (
-    <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-50 w-auto max-w-lg">
-      <div className="military-panel border-2 border-red-500 bg-red-900/90 px-6 py-3 rounded-lg shadow-2xl animate-pulse">
-        <div className="flex items-start space-x-4">
-          <GiRadioactive className="w-8 h-8 text-red-400 animate-spin flex-shrink-0 mt-1" />
-          <div className="flex-grow">
-            <div className="text-red-200 font-bold text-lg">ТРЕВОГА!</div>
-            <div className="text-red-300 text-sm mb-2">
+    <div className="fixed top-16 left-1/2 transform -translate-x-1/2 z-[60] w-auto max-w-sm md:max-w-lg px-4">
+      <div className="military-panel border-2 border-red-500 bg-red-900/95 backdrop-blur-sm px-4 py-3 rounded-lg shadow-2xl animate-pulse">
+        <div className="flex items-start space-x-3">
+          <GiRadioactive className="w-7 h-7 text-red-400 animate-spin flex-shrink-0 mt-0.5" />
+          <div className="flex-grow min-w-0">
+            <div className="text-red-200 font-bold text-base md:text-lg mb-1">
+              ⚠️ ТРЕВОГА!
+            </div>
+            <div className="text-red-300 text-xs md:text-sm mb-2">
               Обнаружено {totalDrones} дрон(ов) в {activeZones.length}{" "}
               зон(е/ах):
             </div>
-            <div className="space-y-1 text-red-200 tech-font text-sm">
+            <div className="space-y-1 text-red-200 tech-font text-xs">
               {activeZones.map((zone) => (
                 <div
                   key={zone.zoneId}
                   className="flex justify-between items-center bg-red-500/20 px-2 py-1 rounded"
                 >
-                  <span>{zone.zoneName}</span>
-                  <span className="font-bold">{zone.droneCount} дрон(а)</span>
+                  <span className="truncate mr-2">{zone.zoneName}</span>
+                  <span className="font-bold whitespace-nowrap text-xs">
+                    {zone.droneCount} дрон(а)
+                  </span>
                 </div>
               ))}
             </div>
           </div>
           <button
             onClick={onDismiss}
-            className="military-button p-2 rounded text-red-400 hover:text-white flex-shrink-0"
+            className="military-button p-2 rounded text-red-400 hover:text-white flex-shrink-0 transition-colors"
             title="Закрыть"
           >
-            <MdWarning className="w-5 h-5" />
+            <MdClose className="w-5 h-5" />
           </button>
         </div>
       </div>
@@ -170,6 +172,7 @@ export const DroneMap: React.FC = () => {
   const [mapType, setMapType] = useState<"osm" | "satellite">("osm");
   const [isConnected, setIsConnected] = useState(false);
   const [showDroneList, setShowDroneList] = useState(true);
+  const [showFilterPanel, setShowFilterPanel] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [historyDroneId, setHistoryDroneId] = useState<number | null>(null);
   const [tooltip, setTooltip] = useState<{
@@ -178,7 +181,6 @@ export const DroneMap: React.FC = () => {
     y: number;
   } | null>(null);
 
-  // ✅ ИЗМЕНЕНИЕ #3: Меняем состояние для хранения подробной информации
   const [activeZones, setActiveZones] = useState<ActiveZoneInfo[]>([]);
   const [isAlarmDismissed, setIsAlarmDismissed] = useState(false);
 
@@ -464,7 +466,6 @@ export const DroneMap: React.FC = () => {
       });
     });
 
-    // ✅ ИЗМЕНЕНИЕ #5: Обновляем слушатель для приема новых данных
     connection.on("ZoneActivityUpdated", (zoneInfo: ActiveZoneInfo[]) => {
       setActiveZones(zoneInfo);
     });
@@ -748,25 +749,86 @@ export const DroneMap: React.FC = () => {
     view.animate({ zoom: 12, duration: 500 });
   };
 
+  const closeAllMobilePanels = () => {
+    setShowDroneList(false);
+    setShowFilterPanel(false);
+  };
+
   return (
-    <div className="flex h-screen bg-gray-900 military-grid">
-      <FilterPanel
-        filters={filters}
-        onFiltersChange={applyFilters}
-        stats={stats}
-        isConnected={isConnected}
-      />
+    <div className="flex h-screen bg-gray-900 military-grid relative">
+      {/* Backdrop для мобильных панелей */}
+      {(showDroneList || showFilterPanel) && (
+        <div
+          className="fixed inset-0 bg-black/60 z-30 lg:hidden"
+          onClick={closeAllMobilePanels}
+        />
+      )}
+
+      {/* Левая панель фильтров */}
+      <div
+        className={`
+        fixed lg:static
+        inset-y-0 left-0
+        w-80
+        transform transition-transform duration-300 ease-in-out
+        z-40
+        ${
+          showFilterPanel
+            ? "translate-x-0"
+            : "-translate-x-full lg:translate-x-0"
+        }
+      `}
+      >
+        <FilterPanel
+          filters={filters}
+          onFiltersChange={applyFilters}
+          stats={stats}
+          isConnected={isConnected}
+        />
+      </div>
+
+      {/* Основная область карты */}
       <div className="flex-1 relative">
         <div ref={mapRef} className="w-full h-full" />
+
         {tooltip && (
           <DroneTooltip drone={tooltip.drone} x={tooltip.x} y={tooltip.y} />
         )}
+
+        {/* Окно тревоги - исправленное позиционирование */}
         {!isAlarmDismissed && activeZones.length > 0 && (
           <AlarmPanel
             activeZones={activeZones}
             onDismiss={() => setIsAlarmDismissed(true)}
           />
         )}
+
+        {/* Мобильные кнопки управления панелями */}
+        <div className="absolute top-4 left-4 right-4 flex justify-between items-start z-20 lg:hidden">
+          <button
+            onClick={() => {
+              setShowFilterPanel(!showFilterPanel);
+              setShowDroneList(false);
+            }}
+            className="military-button p-3 rounded-lg text-green-400 hover:text-white shadow-xl backdrop-blur-sm bg-gray-900/80"
+            title="Фильтры"
+          >
+            <HiOutlineFilter className="w-6 h-6" />
+          </button>
+
+          <button
+            onClick={() => {
+              setShowDroneList(!showDroneList);
+              setShowFilterPanel(false);
+            }}
+            className="military-button p-3 rounded-lg text-green-400 hover:text-white shadow-xl backdrop-blur-sm bg-gray-900/80"
+            title="Список дронов"
+          >
+            <HiOutlineViewList className="w-6 h-6" />
+          </button>
+        </div>
+
+        {/* MapControls - только на десктопе */}
         <MapControls
           mapType={mapType}
           showZones={showZones}
@@ -777,6 +839,8 @@ export const DroneMap: React.FC = () => {
           onCenterMap={handleCenterMap}
           onResetZoom={handleResetZoom}
         />
+
+        {/* DroneInfoPanel - адаптивный */}
         {selectedDrone && (
           <DroneInfoPanel
             drone={selectedDrone}
@@ -786,9 +850,11 @@ export const DroneMap: React.FC = () => {
             }}
           />
         )}
+
+        {/* Кнопка показа списка на десктопе */}
         <button
           onClick={() => setShowDroneList(!showDroneList)}
-          className="absolute top-4 right-4 military-button p-3 rounded-lg text-green-400 hover:text-white z-10"
+          className="hidden lg:block absolute top-4 right-4 military-button p-3 rounded-lg text-green-400 hover:text-white z-10"
           title={showDroneList ? "Скрыть список" : "Показать список"}
         >
           <svg
@@ -806,34 +872,65 @@ export const DroneMap: React.FC = () => {
           </svg>
         </button>
       </div>
-      {showDroneList && (
-        <div className="w-96 h-full">
+
+      {/* Правая панель списка дронов */}
+      <div
+        className={`
+        fixed lg:static
+        inset-y-0 right-0
+        w-full sm:w-96 lg:w-96
+        transform transition-transform duration-300 ease-in-out
+        z-40
+        ${showDroneList ? "translate-x-0" : "translate-x-full"}
+        ${!showDroneList && "lg:hidden"}
+      `}
+      >
+        <div className="h-full flex flex-col">
+          {/* Кнопка закрытия для мобильных */}
+          <div className="lg:hidden flex justify-end p-2 bg-gray-900 border-b border-green-500/20">
+            <button
+              onClick={() => setShowDroneList(false)}
+              className="military-button p-2 rounded text-green-400 hover:text-white"
+            >
+              <MdClose className="w-6 h-6" />
+            </button>
+          </div>
           <DroneList
             drones={drones}
             selectedDrone={selectedDrone}
-            onDroneSelect={(drone) => handleDroneSelect(drone, true)}
+            onDroneSelect={(drone) => {
+              handleDroneSelect(drone, true);
+              // Закрываем панель на мобильных после выбора
+              if (window.innerWidth < 1024) {
+                setShowDroneList(false);
+              }
+            }}
             onDroneTrack={handleDroneTrack}
           />
         </div>
-      )}
+      </div>
+
+      {/* DroneHistoryPanel - адаптивный */}
       {showHistory && historyDroneId && (
-        <DroneHistoryPanel
-          droneId={historyDroneId}
-          droneName={
-            drones.find((d) => d.id === historyDroneId)?.name ||
-            `Drone-${historyDroneId}`
-          }
-          onClose={() => {
-            setShowHistory(false);
-            setHistoryDroneId(null);
-          }}
-        />
+        <div className="fixed inset-0 lg:inset-auto lg:right-0 lg:top-0 lg:bottom-0 lg:w-96 z-50">
+          <DroneHistoryPanel
+            droneId={historyDroneId}
+            droneName={
+              drones.find((d) => d.id === historyDroneId)?.name ||
+              `Drone-${historyDroneId}`
+            }
+            onClose={() => {
+              setShowHistory(false);
+              setHistoryDroneId(null);
+            }}
+          />
+        </div>
       )}
     </div>
   );
 };
 
-// Хелпер для иконки дрона с эффектом свечения
+// Helper functions остаются без изменений
 const createDroneIconDataUri = (color: string, status: string) => {
   const bgColor = status === "Active" ? "#22c55e" : "#ef4444";
 
@@ -844,7 +941,6 @@ const createDroneIconDataUri = (color: string, status: string) => {
       viewBox="0 0 36 36"
       xmlns="http://www.w3.org/2000/svg"
     >
-      {/* Пульсирующий ореол для активных */}
       {status === "Active" && (
         <circle
           cx="20"
@@ -869,14 +965,8 @@ const createDroneIconDataUri = (color: string, status: string) => {
           />
         </circle>
       )}
-
-      {/* Внешний темный круг */}
       <circle cx="20" cy="20" r="18" fill="#1a1a1a" />
-
-      {/* Внутренний цветной круг */}
       <circle cx="20" cy="20" r="15" fill={bgColor} />
-
-      {/* Тонкая белая обводка */}
       <circle
         cx="20"
         cy="20"
@@ -885,8 +975,6 @@ const createDroneIconDataUri = (color: string, status: string) => {
         stroke="#ffffff"
         strokeWidth="1.5"
       />
-
-      {/* Иконка дрона */}
       <g transform="translate(20, 20) scale(1.3)">
         <GiDeliveryDrone
           style={{
@@ -932,7 +1020,6 @@ function createDroneStyle(feature: FeatureLike): Style {
   });
 }
 
-// Простой стиль зоны (первая версия)
 function createZoneStyle(
   feature: FeatureLike,
   isAlarm: boolean = false
@@ -968,7 +1055,6 @@ function createZoneStyle(
   });
 }
 
-// Простой стиль траектории (первая версия)
 function createTrajectoryStyle(feature: FeatureLike): Style {
   return new Style({
     stroke: new Stroke({
