@@ -1,4 +1,4 @@
-# Frontend Dockerfile для React + Vite
+# Frontend Dockerfile для React + Vite (Railway)
 # Размещение: Client/Dockerfile
 
 # Stage 1: Build
@@ -25,6 +25,10 @@ RUN npm run build
 
 # Stage 2: Nginx сервер
 FROM nginx:alpine AS final
+
+# Устанавливаем envsubst для подстановки переменных
+RUN apk add --no-cache gettext
+
 WORKDIR /usr/share/nginx/html
 
 # Удаляем дефолтные файлы nginx
@@ -33,11 +37,14 @@ RUN rm -rf ./*
 # Копируем собранное приложение из build stage
 COPY --from=build /app/dist .
 
-# Копируем nginx конфигурацию
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Копируем nginx конфигурацию как template
+COPY nginx.conf /etc/nginx/templates/default.conf.template
 
-# Открываем порт
-EXPOSE 80
+# Устанавливаем дефолтный PORT если не задан
+ENV PORT=3000
+
+# Nginx автоматически применит envsubst к template при запуске
+EXPOSE $PORT
 
 # Запускаем nginx
 CMD ["nginx", "-g", "daemon off;"]
