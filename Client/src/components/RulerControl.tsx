@@ -1,5 +1,11 @@
 import React from "react";
-import { FaRulerCombined, FaCopy, FaTimes, FaCheck } from "react-icons/fa";
+import {
+  FaRulerCombined,
+  FaCopy,
+  FaTimes,
+  FaCheck,
+  FaUndo,
+} from "react-icons/fa";
 import { LuMousePointerClick, LuPlus } from "react-icons/lu";
 
 interface RulerData {
@@ -14,6 +20,7 @@ interface RulerControlProps {
   onClose: () => void;
   onContinueDrawing: () => void;
   onFinishDrawing: () => void;
+  onUndo: () => void;
 }
 
 export const RulerControl: React.FC<RulerControlProps> = ({
@@ -22,6 +29,7 @@ export const RulerControl: React.FC<RulerControlProps> = ({
   onClose,
   onContinueDrawing,
   onFinishDrawing,
+  onUndo,
 }) => {
   const formatDistance = (d: number) => {
     if (d < 1000) {
@@ -68,6 +76,16 @@ export const RulerControl: React.FC<RulerControlProps> = ({
           <div className="flex items-center space-x-2">
             {hasData && isDrawing && (
               <button
+                onClick={onUndo}
+                className="military-button p-2 rounded text-yellow-400 flex items-center text-xs"
+                title="Отменить последнюю точку"
+              >
+                <FaUndo className="w-4 h-4 mr-1" />
+                Отменить
+              </button>
+            )}
+            {hasData && isDrawing && (
+              <button
                 onClick={onFinishDrawing}
                 className="military-button p-2 rounded text-green-400 flex items-center text-xs"
                 title="Завершить рисование"
@@ -109,7 +127,7 @@ export const RulerControl: React.FC<RulerControlProps> = ({
           <div className="flex flex-col items-center justify-center h-24 text-center">
             <LuMousePointerClick className="w-8 h-8 text-green-400 mb-2" />
             <p className="text-gray-300">
-              Кликните на карту, чтобы поставить точку.
+              Коснитесь карты, чтобы поставить точку.
             </p>
             <p className="text-xs text-gray-500 mt-1">
               Нажмите "Завершить", когда закончите.

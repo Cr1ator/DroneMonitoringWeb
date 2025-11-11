@@ -16,12 +16,11 @@ import {
 import { fromLonLat, toLonLat } from "ol/proj";
 import { getDistance as getGeodesicDistance, offset } from "ol/sphere";
 import { defaults as defaultControls } from "ol/control";
-import { Draw, Modify, Select } from "ol/interaction";
-import { click } from "ol/events/condition";
+import { Draw, Modify } from "ol/interaction";
 import * as signalR from "@microsoft/signalr";
 import { TbDrone } from "react-icons/tb";
 import { GiDeliveryDrone, GiRadioactive } from "react-icons/gi";
-import { MdWarning, MdClose, MdSettings } from "react-icons/md";
+import { MdWarning, MdClose, MdSettings, MdCheckCircle } from "react-icons/md";
 import { HiOutlineFilter } from "react-icons/hi";
 import ReactDOMServer from "react-dom/server";
 import type {
@@ -32,13 +31,13 @@ import type {
   TrajectoryPoint,
 } from "../../types/drone";
 import type { FeatureLike } from "ol/Feature";
-import type { Coordinate } from "ol/coordinate";
 import { DroneInfoPanel } from "../DroneInfoPanel";
 import { FilterPanel } from "./../FilterPanel";
 import { MapControls } from "./../MapControls";
 import { DroneList } from "../DroneList";
 import { DroneHistoryPanel } from "../DroneHistoryPanel";
 import { RulerControl } from "../RulerControl";
+import { RulerEditPanel } from "../RulerEditPanel";
 
 // ... (Компоненты HamburgerIcon, DroneTooltip, AlarmPanel остаются без изменений)
 const HamburgerIcon = () => (
@@ -230,6 +229,11 @@ export const DroneMap: React.FC = () => {
   const [rulerMode, setRulerMode] = useState<"drawing" | "modifying">(
     "drawing"
   );
+  // <-- НОВЫЕ СОСТОЯНИЯ ДЛЯ МОБИЛЬНОГО РЕДАКТИРОВАНИЯ -->
+  const [selectedVertexIndex, setSelectedVertexIndex] = useState<number | null>(
+    null
+  );
+  const [isMovingVertex, setIsMovingVertex] = useState<boolean>(false);
 
   const isRulerActiveRef = useRef(isRulerActive);
   useEffect(() => {
@@ -878,7 +882,7 @@ export const DroneMap: React.FC = () => {
         const source = new VectorSource();
         const layer = new VectorLayer({
           source: source,
-          style: createRulerStyle,
+          style: (feat) => createRulerStyle(feat, selectedVertexIndex),
           zIndex: 200,
         });
         map.addLayer(layer);
@@ -918,18 +922,19 @@ export const DroneMap: React.FC = () => {
         map.addInteraction(draw);
         rulerInteractionsRef.current.draw = draw;
       } else if (rulerMode === "modifying") {
-        const source = rulerLayerRef.current.getSource();
-        if (!source) return;
-
-        const modify = new Modify({ source: source });
-
-        modify.on("modifyend", (event) => {
-          const feature = event.features.getArray()[0];
-          if (feature) updateRulerMeasurements(feature);
-        });
-
-        map.addInteraction(modify);
-        rulerInteractionsRef.current.modify = modify;
+        // Modify для десктопа
+        const isDesktop = window.innerWidth >= 1024;
+        if (isDesktop) {
+          const source = rulerLayerRef.current.getSource();
+          if (!source) return;
+          const modify = new Modify({ source: source });
+          modify.on("modifyend", (event) => {
+            const feature = event.features.getArray()[0];
+            if (feature) updateRulerMeasurements(feature);
+          });
+          map.addInteraction(modify);
+          rulerInteractionsRef.current.modify = modify;
+        }
       }
     } else {
       cleanupInteractions();
@@ -940,17 +945,19 @@ export const DroneMap: React.FC = () => {
       }
       rulerFeatureRef.current = null;
       updateRulerMeasurements(null);
+      setSelectedVertexIndex(null);
+      setIsMovingVertex(false);
     }
 
     return () => {
       cleanupInteractions();
     };
-  }, [isRulerActive, rulerMode, updateRulerMeasurements]);
+  }, [isRulerActive, rulerMode, updateRulerMeasurements, selectedVertexIndex]);
 
-  // <-- ИЗМЕНЕНО: Новый useEffect для удаления и добавления вершин по клику -->
+  // <-- ИЗМЕНЕНО: Логика клика для выбора/добавления/удаления -->
   useEffect(() => {
     const map = mapInstanceRef.current;
-    if (!map || rulerMode !== "modifying") {
+    if (!map || rulerMode !== "modifying" || isMovingVertex) {
       return;
     }
 
@@ -958,14 +965,13 @@ export const DroneMap: React.FC = () => {
       if (!rulerFeatureRef.current) return;
 
       const clickedPixel = event.pixel;
-      const hitTolerance = 10;
+      const hitTolerance = 20; // Увеличено для мобильных
 
       const lineGeom = rulerFeatureRef.current.getGeometry() as LineString;
       const coords = lineGeom.getCoordinates();
 
-      // Сначала проверяем, кликнули ли мы на существующую вершину для удаления
-      for (const coord of coords) {
-        const vertexPixel = map.getPixelFromCoordinate(coord);
+      for (let i = 0; i < coords.length; i++) {
+        const vertexPixel = map.getPixelFromCoordinate(coords[i]);
         if (!vertexPixel) continue;
 
         const distance = Math.sqrt(
@@ -974,53 +980,13 @@ export const DroneMap: React.FC = () => {
         );
 
         if (distance <= hitTolerance) {
-          if (coords.length > 2) {
-            const newCoords = coords.filter(
-              (c) => c[0] !== coord[0] || c[1] !== coord[1]
-            );
-            lineGeom.setCoordinates(newCoords);
-            updateRulerMeasurements(rulerFeatureRef.current);
-          }
-          return; // Выходим, так как действие (удаление) выполнено
+          setSelectedVertexIndex(i);
+          return;
         }
       }
 
-      // Если не попали в вершину, проверяем, кликнули ли на линию для добавления новой точки
-      const closestPoint = lineGeom.getClosestPoint(event.coordinate);
-      const distanceToLine = Math.sqrt(
-        Math.pow(closestPoint[0] - event.coordinate[0], 2) +
-          Math.pow(closestPoint[1] - event.coordinate[1], 2)
-      );
-
-      const resolution = map.getView().getResolution() || 1;
-      if (distanceToLine < hitTolerance * resolution) {
-        let insertIndex = -1;
-        let minSegmentDist = Infinity;
-
-        for (let i = 0; i < coords.length - 1; i++) {
-          const segment = new LineString([coords[i], coords[i + 1]]);
-          const pointOnSegment = segment.getClosestPoint(event.coordinate);
-          const distToPoint = Math.sqrt(
-            Math.pow(pointOnSegment[0] - event.coordinate[0], 2) +
-              Math.pow(pointOnSegment[1] - event.coordinate[1], 2)
-          );
-
-          if (distToPoint < minSegmentDist) {
-            minSegmentDist = distToPoint;
-            insertIndex = i + 1;
-          }
-        }
-
-        if (insertIndex !== -1) {
-          const newCoords = [
-            ...coords.slice(0, insertIndex),
-            event.coordinate,
-            ...coords.slice(insertIndex),
-          ];
-          lineGeom.setCoordinates(newCoords);
-          updateRulerMeasurements(rulerFeatureRef.current);
-        }
-      }
+      // Если не попали в вершину, сбрасываем выбор
+      setSelectedVertexIndex(null);
     };
 
     map.on("click", handleModifyClick);
@@ -1028,7 +994,65 @@ export const DroneMap: React.FC = () => {
     return () => {
       map.un("click", handleModifyClick);
     };
-  }, [rulerMode, updateRulerMeasurements]);
+  }, [rulerMode, isMovingVertex, updateRulerMeasurements]);
+
+  // <-- НОВЫЕ ОБРАБОТЧИКИ -->
+  const handleUndo = () => {
+    if (!rulerFeatureRef.current) return;
+    const lineGeom = rulerFeatureRef.current.getGeometry() as LineString;
+    const coords = lineGeom.getCoordinates();
+    if (coords.length > 0) {
+      const newCoords = coords.slice(0, -1);
+      if (newCoords.length === 0) {
+        rulerLayerRef.current?.getSource()?.clear();
+        rulerFeatureRef.current = null;
+      } else {
+        lineGeom.setCoordinates(newCoords);
+      }
+      updateRulerMeasurements(rulerFeatureRef.current);
+    }
+  };
+
+  const handleDeleteVertex = () => {
+    if (selectedVertexIndex === null || !rulerFeatureRef.current) return;
+    const lineGeom = rulerFeatureRef.current.getGeometry() as LineString;
+    const coords = lineGeom.getCoordinates();
+    if (coords.length > 2) {
+      const newCoords = coords.filter((_, i) => i !== selectedVertexIndex);
+      lineGeom.setCoordinates(newCoords);
+      updateRulerMeasurements(rulerFeatureRef.current);
+    }
+    setSelectedVertexIndex(null);
+  };
+
+  const handleStartMoveVertex = () => {
+    setIsMovingVertex(true);
+    mapInstanceRef.current
+      ?.getInteractions()
+      .forEach((i) => i.setActive(false));
+  };
+
+  const handleConfirmMoveVertex = () => {
+    if (
+      selectedVertexIndex === null ||
+      !rulerFeatureRef.current ||
+      !mapInstanceRef.current
+    )
+      return;
+
+    const newCoord = mapInstanceRef.current.getView().getCenter();
+    if (!newCoord) return;
+
+    const lineGeom = rulerFeatureRef.current.getGeometry() as LineString;
+    const coords = lineGeom.getCoordinates();
+    coords[selectedVertexIndex] = newCoord;
+    lineGeom.setCoordinates(coords);
+    updateRulerMeasurements(rulerFeatureRef.current);
+
+    setIsMovingVertex(false);
+    setSelectedVertexIndex(null);
+    mapInstanceRef.current.getInteractions().forEach((i) => i.setActive(true));
+  };
 
   return (
     <div className="flex h-screen bg-gray-900 military-grid relative overflow-hidden">
@@ -1063,6 +1087,26 @@ export const DroneMap: React.FC = () => {
 
       <div className="flex-1 relative">
         <div ref={mapRef} className="w-full h-full" />
+
+        {/* <-- НОВЫЕ ЭЛЕМЕНТЫ UI ДЛЯ ПЕРЕМЕЩЕНИЯ ТОЧКИ --> */}
+        {isMovingVertex && (
+          <>
+            <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30 pointer-events-none">
+              <div className="w-8 h-8 border-2 border-red-500 rounded-full bg-red-500/20 animate-pulse"></div>
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-px h-12 bg-red-500"></div>
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-px bg-red-500"></div>
+            </div>
+            <div className="fixed bottom-24 left-1/2 transform -translate-x-1/2 z-30">
+              <button
+                onClick={handleConfirmMoveVertex}
+                className="military-button p-3 rounded-lg text-green-400 flex items-center text-lg shadow-2xl"
+              >
+                <MdCheckCircle className="w-6 h-6 mr-2" />
+                Подтвердить
+              </button>
+            </div>
+          </>
+        )}
 
         {tooltip && (
           <DroneTooltip drone={tooltip.drone} x={tooltip.x} y={tooltip.y} />
@@ -1177,8 +1221,16 @@ export const DroneMap: React.FC = () => {
             onClose={() => setIsRulerActive(false)}
             onContinueDrawing={() => setRulerMode("drawing")}
             onFinishDrawing={() => setRulerMode("modifying")}
+            onUndo={handleUndo}
           />
         )}
+
+        <RulerEditPanel
+          isVisible={selectedVertexIndex !== null && !isMovingVertex}
+          onMove={handleStartMoveVertex}
+          onDelete={handleDeleteVertex}
+          onDeselect={() => setSelectedVertexIndex(null)}
+        />
 
         {selectedDrone && (
           <DroneInfoPanel
@@ -1388,7 +1440,11 @@ function createTrajectoryStyle(feature: FeatureLike): Style {
   });
 }
 
-const createRulerStyle = (feature: FeatureLike) => {
+// <-- ИЗМЕНЕНО: Стиль теперь принимает selectedVertexIndex -->
+const createRulerStyle = (
+  feature: FeatureLike,
+  selectedVertexIndex: number | null
+) => {
   const geometry = feature.getGeometry() as LineString;
   const styles = [
     new Style({
@@ -1401,12 +1457,17 @@ const createRulerStyle = (feature: FeatureLike) => {
 
   const coordinates = geometry.getCoordinates();
   for (let i = 0; i < coordinates.length; i++) {
+    const isSelected = i === selectedVertexIndex;
     styles.push(
       new Style({
         geometry: new Point(coordinates[i]),
         image: new CircleStyle({
-          radius: 7,
-          fill: new Fill({ color: "rgba(0, 255, 255, 0.8)" }),
+          radius: isSelected ? 10 : 7,
+          fill: new Fill({
+            color: isSelected
+              ? "rgba(255, 0, 0, 0.8)"
+              : "rgba(0, 255, 255, 0.8)",
+          }),
           stroke: new Stroke({ color: "#ffffff", width: 2 }),
         }),
       })
@@ -1440,11 +1501,3 @@ const createRulerStyle = (feature: FeatureLike) => {
 
   return styles;
 };
-
-const createRulerVertexStyle = new Style({
-  image: new CircleStyle({
-    radius: 8,
-    fill: new Fill({ color: "rgba(255, 0, 0, 0.8)" }),
-    stroke: new Stroke({ color: "#ffffff", width: 2 }),
-  }),
-});
