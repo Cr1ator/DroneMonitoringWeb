@@ -13,9 +13,11 @@ import {
   Circle as CircleStyle,
   Icon,
 } from "ol/style";
-import { fromLonLat } from "ol/proj";
-import { getDistance, offset } from "ol/sphere";
+import { fromLonLat, toLonLat } from "ol/proj";
+import { getDistance as getGeodesicDistance, offset } from "ol/sphere";
 import { defaults as defaultControls } from "ol/control";
+import { Draw, Modify, Select } from "ol/interaction";
+import { click } from "ol/events/condition";
 import * as signalR from "@microsoft/signalr";
 import { TbDrone } from "react-icons/tb";
 import { GiDeliveryDrone, GiRadioactive } from "react-icons/gi";
@@ -30,13 +32,14 @@ import type {
   TrajectoryPoint,
 } from "../../types/drone";
 import type { FeatureLike } from "ol/Feature";
+import type { Coordinate } from "ol/coordinate";
 import { DroneInfoPanel } from "../DroneInfoPanel";
 import { FilterPanel } from "./../FilterPanel";
 import { MapControls } from "./../MapControls";
 import { DroneList } from "../DroneList";
 import { DroneHistoryPanel } from "../DroneHistoryPanel";
+import { RulerControl } from "../RulerControl";
 
-// <-- ДОБАВЛЕНО: Компонент иконки "бургер" для переиспользования -->
 const HamburgerIcon = () => (
   <svg
     className="w-6 h-6"
@@ -57,6 +60,12 @@ interface ActiveZoneInfo {
   zoneId: number;
   zoneName: string;
   droneCount: number;
+}
+
+interface RulerData {
+  totalDistance: number;
+  segmentDistances: number[];
+  coordinates: { lon: number; lat: number }[];
 }
 
 const DroneTooltip: React.FC<{
@@ -171,6 +180,13 @@ export const DroneMap: React.FC = () => {
   const droneLayerRef = useRef<VectorLayer<VectorSource> | null>(null);
   const zoneLayerRef = useRef<VectorLayer<VectorSource> | null>(null);
   const trajectoryLayerRef = useRef<VectorLayer<VectorSource> | null>(null);
+  const rulerLayerRef = useRef<VectorLayer<VectorSource> | null>(null);
+  const rulerInteractionsRef = useRef<{
+    draw?: Draw;
+    modify?: Modify;
+    select?: Select;
+  }>({});
+  const rulerFeatureRef = useRef<Feature | null>(null);
 
   const dronesRef = useRef<Drone[]>([]);
   const zonesRef = useRef<CoverageZone[]>([]);
@@ -201,6 +217,14 @@ export const DroneMap: React.FC = () => {
 
   const [activeZones, setActiveZones] = useState<ActiveZoneInfo[]>([]);
   const [isAlarmDismissed, setIsAlarmDismissed] = useState(false);
+  const [isRulerActive, setIsRulerActive] = useState(false);
+  const [rulerData, setRulerData] = useState<RulerData | null>(null);
+
+  // <-- ИЗМЕНЕНО: Добавляем ref для отслеживания актуального состояния линейки в обработчиках -->
+  const isRulerActiveRef = useRef(isRulerActive);
+  useEffect(() => {
+    isRulerActiveRef.current = isRulerActive;
+  }, [isRulerActive]);
 
   useEffect(() => {
     if (window.innerWidth < 1024) {
@@ -222,7 +246,7 @@ export const DroneMap: React.FC = () => {
     (point: { lon: number; lat: number }): boolean => {
       if (zonesRef.current.length === 0) return false;
       for (const zone of zonesRef.current) {
-        const distance = getDistance(
+        const distance = getGeodesicDistance(
           [point.lon, point.lat],
           [zone.centerLon, zone.centerLat]
         );
@@ -270,6 +294,7 @@ export const DroneMap: React.FC = () => {
     });
   }, [drones, isDroneInAnyZone]);
 
+  // <-- ИЗМЕНЕНО: Этот useEffect теперь выполняется ТОЛЬКО ОДИН РАЗ -->
   useEffect(() => {
     if (!mapRef.current || mapInstanceRef.current) return;
 
@@ -326,7 +351,10 @@ export const DroneMap: React.FC = () => {
       }
     }, 100);
 
+    // Обработчики событий теперь устанавливаются здесь и используют ref
     map.on("click", (event) => {
+      // <-- ИЗМЕНЕНО: Проверяем актуальное состояние через ref -->
+      if (isRulerActiveRef.current) return;
       const feature = map.forEachFeatureAtPixel(event.pixel, (f) => f, {
         layerFilter: (layer) => layer === droneLayer,
       });
@@ -343,6 +371,12 @@ export const DroneMap: React.FC = () => {
     });
 
     map.on("pointermove", (event) => {
+      // <-- ИЗМЕНЕНО: Проверяем актуальное состояние через ref -->
+      if (isRulerActiveRef.current) {
+        map.getTargetElement().style.cursor = "";
+        setTooltip(null);
+        return;
+      }
       const feature = map.forEachFeatureAtPixel(event.pixel, (f) => f, {
         layerFilter: (layer) => layer === droneLayer,
       });
@@ -367,7 +401,7 @@ export const DroneMap: React.FC = () => {
         map.dispose();
       }
     };
-  }, []);
+  }, []); // <-- ИЗМЕНЕНО: Пустой массив зависимостей, чтобы хук выполнился один раз
 
   useEffect(() => {
     if (!zoneLayerRef.current) return;
@@ -781,9 +815,204 @@ export const DroneMap: React.FC = () => {
     setShowMapControls(false);
   };
 
+  const updateRulerMeasurements = useCallback((feature: Feature | null) => {
+    if (!feature) {
+      setRulerData(null);
+      return;
+    }
+
+    const geometry = feature.getGeometry() as LineString;
+    const coordinates = geometry.getCoordinates();
+    const lonLatCoords = coordinates.map((c) => toLonLat(c));
+
+    let totalDistance = 0;
+    const segmentDistances: number[] = [];
+
+    for (let i = 0; i < lonLatCoords.length - 1; i++) {
+      const dist = getGeodesicDistance(lonLatCoords[i], lonLatCoords[i + 1]);
+      segmentDistances.push(dist);
+      totalDistance += dist;
+    }
+
+    setRulerData({
+      totalDistance,
+      segmentDistances,
+      coordinates: lonLatCoords.map((c) => ({ lon: c[0], lat: c[1] })),
+    });
+  }, []);
+
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+
+    const cleanupInteractions = () => {
+      if (rulerInteractionsRef.current.draw)
+        map.removeInteraction(rulerInteractionsRef.current.draw);
+      if (rulerInteractionsRef.current.modify)
+        map.removeInteraction(rulerInteractionsRef.current.modify);
+      if (rulerInteractionsRef.current.select)
+        map.removeInteraction(rulerInteractionsRef.current.select);
+      rulerInteractionsRef.current = {};
+    };
+
+    const clearRulerLayer = () => {
+      rulerFeatureRef.current = null;
+      updateRulerMeasurements(null);
+      if (rulerLayerRef.current) {
+        rulerLayerRef.current.getSource()?.clear();
+        map.removeLayer(rulerLayerRef.current);
+        rulerLayerRef.current = null;
+      }
+    };
+
+    if (isRulerActive) {
+      const source = new VectorSource();
+      const layer = new VectorLayer({
+        source: source,
+        style: createRulerStyle,
+        zIndex: 200,
+      });
+      map.addLayer(layer);
+      rulerLayerRef.current = layer;
+
+      const draw = new Draw({
+        source: source,
+        type: "LineString",
+        style: createRulerStyle,
+      });
+
+      const modify = new Modify({ source: source, style: createRulerStyle });
+      const select = new Select({
+        condition: click,
+        style: createRulerVertexStyle,
+        layers: [layer],
+      });
+
+      rulerInteractionsRef.current = { draw, modify, select };
+      map.addInteraction(draw);
+      map.addInteraction(modify);
+      map.addInteraction(select);
+
+      draw.on("drawstart", () => {
+        source.clear();
+        rulerFeatureRef.current = null;
+      });
+
+      draw.on("drawend", (event) => {
+        rulerFeatureRef.current = event.feature;
+        updateRulerMeasurements(event.feature);
+      });
+
+      modify.on("modifyend", (event) => {
+        const feature = event.features.getArray()[0];
+        if (feature) {
+          updateRulerMeasurements(feature);
+        }
+      });
+
+      select.on("select", (event) => {
+        if (event.selected.length > 0) {
+          const selectedFeature = event.selected[0];
+          const geometry = selectedFeature.getGeometry();
+          if (geometry instanceof Point) {
+            const lineFeature = rulerFeatureRef.current;
+            if (!lineFeature) return;
+
+            const lineGeom = lineFeature.getGeometry() as LineString;
+            const coords = lineGeom.getCoordinates();
+
+            if (coords.length <= 2) {
+              console.log("Нельзя удалить, осталось всего 2 точки.");
+              select.getFeatures().clear();
+              return;
+            }
+
+            const selectedCoord = geometry.getCoordinates();
+            const newCoords = coords.filter(
+              (c) => c[0] !== selectedCoord[0] || c[1] !== selectedCoord[1]
+            );
+
+            lineGeom.setCoordinates(newCoords);
+            updateRulerMeasurements(lineFeature);
+          }
+          select.getFeatures().clear();
+        }
+      });
+    } else {
+      cleanupInteractions();
+      clearRulerLayer();
+    }
+
+    return () => {
+      cleanupInteractions();
+      if (map && rulerLayerRef.current) {
+        map.removeLayer(rulerLayerRef.current);
+      }
+    };
+  }, [isRulerActive, updateRulerMeasurements]);
+
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+
+    const handleMapClick = (event: any) => {
+      if (!isRulerActiveRef.current || !rulerFeatureRef.current) return;
+
+      const featureAtPixel = map.forEachFeatureAtPixel(event.pixel, (f) => f, {
+        layerFilter: (l) => l === rulerLayerRef.current,
+        hitTolerance: 5,
+      });
+      if (featureAtPixel) return;
+
+      const lineGeom = rulerFeatureRef.current.getGeometry() as LineString;
+      const closestPoint = lineGeom.getClosestPoint(event.coordinate);
+      const distance = Math.sqrt(
+        Math.pow(closestPoint[0] - event.coordinate[0], 2) +
+          Math.pow(closestPoint[1] - event.coordinate[1], 2)
+      );
+
+      const pixelTolerance = 10;
+      const resolution = map.getView().getResolution() || 1;
+      if (distance < pixelTolerance * resolution) {
+        const coords = lineGeom.getCoordinates();
+        let insertIndex = -1;
+        let minSegmentDist = Infinity;
+
+        for (let i = 0; i < coords.length - 1; i++) {
+          const segment = new LineString([coords[i], coords[i + 1]]);
+          const pointOnSegment = segment.getClosestPoint(event.coordinate);
+          const distToPoint = Math.sqrt(
+            Math.pow(pointOnSegment[0] - event.coordinate[0], 2) +
+              Math.pow(pointOnSegment[1] - event.coordinate[1], 2)
+          );
+
+          if (distToPoint < minSegmentDist) {
+            minSegmentDist = distToPoint;
+            insertIndex = i + 1;
+          }
+        }
+
+        if (insertIndex !== -1) {
+          const newCoords = [
+            ...coords.slice(0, insertIndex),
+            event.coordinate,
+            ...coords.slice(insertIndex),
+          ];
+          lineGeom.setCoordinates(newCoords);
+          updateRulerMeasurements(rulerFeatureRef.current);
+        }
+      }
+    };
+
+    map.on("click", handleMapClick);
+
+    return () => {
+      map.un("click", handleMapClick);
+    };
+  }, [updateRulerMeasurements]);
+
   return (
     <div className="flex h-screen bg-gray-900 military-grid relative overflow-hidden">
-      {/* Backdrop для мобильных панелей */}
       {(showDroneList || showFilterPanel || showMapControls) && (
         <div
           className="fixed inset-0 bg-black/60 z-30 lg:hidden"
@@ -791,8 +1020,6 @@ export const DroneMap: React.FC = () => {
         />
       )}
 
-      {/* Левая панель фильтров */}
-      {/* <-- ИЗМЕНЕНО: Добавлен overflow-hidden для корректного скрытия --> */}
       <div
         className={`
         flex-shrink-0
@@ -814,7 +1041,6 @@ export const DroneMap: React.FC = () => {
         </div>
       </div>
 
-      {/* Основная область карты */}
       <div className="flex-1 relative">
         <div ref={mapRef} className="w-full h-full" />
 
@@ -822,7 +1048,6 @@ export const DroneMap: React.FC = () => {
           <DroneTooltip drone={tooltip.drone} x={tooltip.x} y={tooltip.y} />
         )}
 
-        {/* Окно тревоги */}
         {!isAlarmDismissed && activeZones.length > 0 && (
           <AlarmPanel
             activeZones={activeZones}
@@ -830,7 +1055,6 @@ export const DroneMap: React.FC = () => {
           />
         )}
 
-        {/* Кнопки управления панелями для десктопа */}
         <div className="absolute top-20 left-4 hidden lg:flex flex-col space-y-2 z-20">
           <button
             onClick={() => setShowFilterPanel(!showFilterPanel)}
@@ -852,7 +1076,6 @@ export const DroneMap: React.FC = () => {
           </button>
         </div>
 
-        {/* Мобильные кнопки управления */}
         <div className="absolute bottom-4 left-4 flex flex-col space-y-2 z-20 lg:hidden">
           <button
             onClick={() => {
@@ -879,7 +1102,6 @@ export const DroneMap: React.FC = () => {
           </button>
         </div>
 
-        {/* Кнопка списка дронов справа внизу на мобильных */}
         <div className="absolute bottom-4 right-4 z-20 lg:hidden">
           <button
             onClick={() => {
@@ -894,7 +1116,6 @@ export const DroneMap: React.FC = () => {
           </button>
         </div>
 
-        {/* MapControls */}
         <div
           className={`
           fixed lg:absolute
@@ -909,16 +1130,24 @@ export const DroneMap: React.FC = () => {
             mapType={mapType}
             showZones={showZones}
             showTrajectories={showTrajectories}
+            isRulerActive={isRulerActive}
             onToggleMapType={toggleMapType}
             onToggleZones={() => setShowZones(!showZones)}
             onToggleTrajectories={() => setShowTrajectories(!showTrajectories)}
             onCenterMap={handleCenterMap}
             onResetZoom={handleResetZoom}
+            onToggleRuler={() => setIsRulerActive(!isRulerActive)}
             onClose={() => setShowMapControls(false)}
           />
         </div>
 
-        {/* DroneInfoPanel */}
+        {isRulerActive && (
+          <RulerControl
+            rulerData={rulerData}
+            onClose={() => setIsRulerActive(false)}
+          />
+        )}
+
         {selectedDrone && (
           <DroneInfoPanel
             drone={selectedDrone}
@@ -930,7 +1159,6 @@ export const DroneMap: React.FC = () => {
           />
         )}
 
-        {/* Кнопка показа списка на десктопе */}
         <button
           onClick={() => setShowDroneList(!showDroneList)}
           className="!hidden lg:!flex absolute top-4 right-4 military-button p-3 rounded-lg text-green-400 hover:text-white z-10"
@@ -938,39 +1166,19 @@ export const DroneMap: React.FC = () => {
         >
           <HamburgerIcon />
         </button>
-
-        {/* <div className="absolute bottom-4 right-4 z-20 lg:hidden">
-          <button
-            onClick={() => {
-              setShowDroneList(!showDroneList);
-              setShowFilterPanel(false);
-              setShowMapControls(false);
-            }}
-            className="military-button p-3 rounded-lg text-green-400 hover:text-white shadow-xl backdrop-blur-sm bg-gray-900/90"
-            title="Список дронов"
-          >
-            <HamburgerIcon />
-          </button>
-        </div> */}
       </div>
 
-      {/* Правая панель списка дронов */}
       <div
         className={`
           bg-gray-900 h-full
           transition-all duration-300 ease-in-out
-          
-          /* --- Стили для мобильных устройств (< 1024px) --- */
           fixed inset-y-0 right-0 z-40 w-full sm:w-96
           transform ${showDroneList ? "translate-x-0" : "translate-x-full"}
-          
-          /* --- Стили для десктопа (>= 1024px) --- */
           lg:static lg:shrink-0 lg:transform-none
           lg:overflow-hidden ${showDroneList ? "lg:w-96" : "lg:w-0"}
         `}
       >
         <div className="w-full sm:w-96 lg:w-96 h-full flex flex-col">
-          {/* Кнопка закрытия для мобильных */}
           <div className="lg:hidden flex justify-end p-2 bg-gray-900 border-b border-green-500/20">
             <button
               onClick={() => setShowDroneList(false)}
@@ -993,7 +1201,6 @@ export const DroneMap: React.FC = () => {
         </div>
       </div>
 
-      {/* DroneHistoryPanel - адаптивный */}
       {showHistory && historyDroneId && (
         <div className="fixed inset-0 lg:inset-auto lg:right-0 lg:top-0 lg:bottom-0 lg:w-96 z-50">
           <DroneHistoryPanel
@@ -1013,7 +1220,6 @@ export const DroneMap: React.FC = () => {
   );
 };
 
-// Helper functions остаются без изменений
 const createDroneIconDataUri = (color: string, status: string) => {
   const bgColor = status === "Active" ? "#22c55e" : "#ef4444";
 
@@ -1148,3 +1354,64 @@ function createTrajectoryStyle(feature: FeatureLike): Style {
     }),
   });
 }
+
+const createRulerStyle = (feature: FeatureLike) => {
+  const geometry = feature.getGeometry() as LineString;
+  const styles = [
+    new Style({
+      stroke: new Stroke({
+        color: "rgba(0, 255, 255, 0.8)",
+        width: 4,
+      }),
+    }),
+  ];
+
+  const coordinates = geometry.getCoordinates();
+  for (let i = 0; i < coordinates.length; i++) {
+    styles.push(
+      new Style({
+        geometry: new Point(coordinates[i]),
+        image: new CircleStyle({
+          radius: 7,
+          fill: new Fill({ color: "rgba(0, 255, 255, 0.8)" }),
+          stroke: new Stroke({ color: "#ffffff", width: 2 }),
+        }),
+      })
+    );
+  }
+
+  for (let i = 0; i < coordinates.length - 1; i++) {
+    const p1 = coordinates[i];
+    const p2 = coordinates[i + 1];
+    const distance = getGeodesicDistance(toLonLat(p1), toLonLat(p2));
+    const text =
+      distance < 1000
+        ? `${distance.toFixed(0)} м`
+        : `${(distance / 1000).toFixed(2)} км`;
+
+    const midpointCoord = [(p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2];
+
+    styles.push(
+      new Style({
+        geometry: new Point(midpointCoord),
+        text: new Text({
+          text: text,
+          font: "bold 12px 'Courier New', monospace",
+          fill: new Fill({ color: "#00ffff" }),
+          stroke: new Stroke({ color: "#000", width: 3 }),
+          offsetY: -15,
+        }),
+      })
+    );
+  }
+
+  return styles;
+};
+
+const createRulerVertexStyle = new Style({
+  image: new CircleStyle({
+    radius: 8,
+    fill: new Fill({ color: "rgba(255, 0, 0, 0.8)" }),
+    stroke: new Stroke({ color: "#ffffff", width: 2 }),
+  }),
+});

@@ -3,16 +3,19 @@ import { BiSolidMap } from "react-icons/bi";
 import { HiArrowTrendingUp } from "react-icons/hi2";
 import { PiMapPinSimpleAreaBold, PiMagnifyingGlassBold } from "react-icons/pi";
 import { MdClose } from "react-icons/md";
+import { FaRuler } from "react-icons/fa";
 
 interface MapControlsProps {
   mapType: "osm" | "satellite";
   showZones: boolean;
   showTrajectories: boolean;
+  isRulerActive: boolean;
   onToggleMapType: () => void;
   onToggleZones: () => void;
   onToggleTrajectories: () => void;
   onCenterMap: () => void;
   onResetZoom: () => void;
+  onToggleRuler: () => void;
   onClose?: () => void;
 }
 
@@ -20,11 +23,13 @@ export const MapControls: React.FC<MapControlsProps> = ({
   mapType,
   showZones,
   showTrajectories,
+  isRulerActive,
   onToggleMapType,
   onToggleZones,
   onToggleTrajectories,
   onCenterMap,
   onResetZoom,
+  onToggleRuler,
   onClose,
 }) => {
   return (
@@ -213,7 +218,7 @@ export const MapControls: React.FC<MapControlsProps> = ({
 
         {/* Кнопки быстрых действий */}
         <div className="pt-3 border-t border-green-500/20">
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             <button
               onClick={onCenterMap}
               className="px-2 py-2 military-button rounded text-green-400 text-xs font-semibold uppercase tracking-wider hover:bg-green-500/20 flex items-center justify-center"
@@ -229,6 +234,18 @@ export const MapControls: React.FC<MapControlsProps> = ({
             >
               <PiMagnifyingGlassBold className="w-4 h-4 mr-1" />
               Сброс
+            </button>
+            <button
+              onClick={onToggleRuler}
+              className={`px-2 py-2 military-button rounded text-xs font-semibold uppercase tracking-wider flex items-center justify-center ${
+                isRulerActive
+                  ? "bg-green-500/40 text-white"
+                  : "text-green-400 hover:bg-green-500/20"
+              }`}
+              title="Включить/выключить линейку"
+            >
+              <FaRuler className="w-4 h-4 mr-1" />
+              Линейка
             </button>
           </div>
         </div>
