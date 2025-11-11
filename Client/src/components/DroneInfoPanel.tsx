@@ -27,7 +27,7 @@ ChartJS.register(
 interface DroneInfoPanelProps {
   drone: Drone;
   onClose: () => void;
-  isListVisible: boolean; // <-- ДОБАВЛЕНО: свойство для отслеживания видимости списка
+  isListVisible: boolean;
 }
 
 interface HistoryPoint {
@@ -42,7 +42,7 @@ interface HistoryPoint {
 export const DroneInfoPanel: React.FC<DroneInfoPanelProps> = ({
   drone,
   onClose,
-  isListVisible, // <-- ДОБАВЛЕНО: получаем новое свойство
+  isListVisible,
 }) => {
   const [history, setHistory] = useState<HistoryPoint[]>([]);
   const [loading, setLoading] = useState(false);
@@ -190,7 +190,7 @@ export const DroneInfoPanel: React.FC<DroneInfoPanelProps> = ({
       military-panel rounded-lg shadow-2xl
       animate-slideInRight
       flex flex-col overflow-hidden
-      z-40
+      z-50 /* <-- ИЗМЕНЕНО: z-index увеличен с 40 до 50 */
       transition-all duration-300 ease-in-out
     `}
     >
@@ -348,61 +348,86 @@ export const DroneInfoPanel: React.FC<DroneInfoPanelProps> = ({
         )}
 
         {/* История полётов */}
-        <div
-          className="p-3 md:p-4 overflow-y-auto military-scroll border-t border-green-500/20"
-          style={{ minHeight: "200px", maxHeight: "256px" }}
-        >
+        <div className="p-3 md:p-4 border-t border-green-500/20">
           <h4 className="text-xs font-semibold text-gray-400 mb-2 md:mb-3 uppercase">
             История полётов (последние 20)
           </h4>
 
-          {loading ? (
-            <div
-              className="flex items-center justify-center"
-              style={{ height: "150px" }}
-            >
-              <div className="text-center text-gray-500">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-400 mx-auto"></div>
-                <p className="mt-2 text-sm">Загрузка...</p>
+          {/* --- ИЗМЕНЕНО: Добавлен относительный контейнер с минимальной высотой для стабильности --- */}
+          <div
+            className="relative military-scroll overflow-y-auto"
+            style={{ minHeight: "256px", maxHeight: "256px" }}
+          >
+            {/* --- ИЗМЕНЕНО: Оверлей загрузки, который появляется только при ОБНОВЛЕНИИ данных --- */}
+            {loading && history.length > 0 && (
+              <div className="absolute inset-0 bg-gray-800/70 backdrop-blur-sm flex items-center justify-center z-10 rounded-lg">
+                <div className="text-center text-gray-400">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-400 mx-auto"></div>
+                  <p className="mt-2 text-sm">Обновление...</p>
+                </div>
               </div>
-            </div>
-          ) : history.length > 0 ? (
-            <div className="space-y-2">
-              {history.map((point, index) => (
-                <div
-                  key={`${point.timestamp}-${index}`}
-                  className="bg-gray-800/50 p-2 rounded text-xs border border-green-500/10 hover:border-green-500/30 transition-colors"
-                >
-                  <div className="flex justify-between items-center flex-wrap gap-1">
-                    <span className="text-gray-400 tech-font text-xs">
-                      {formatDate(point.timestamp)}
-                    </span>
-                    <div className="flex space-x-2 md:space-x-3 text-xs">
-                      <span title="Высота" className="text-green-400 tech-font">
-                        ↑{formatAltitude(point.altitude)}
+            )}
+
+            {/* --- ИЗМЕНЕНО: Логика отображения контента --- */}
+            {loading && history.length === 0 ? (
+              // Начальная загрузка, когда данных еще нет
+              <div
+                className="flex items-center justify-center"
+                style={{ height: "240px" }}
+              >
+                <div className="text-center text-gray-500">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-400 mx-auto"></div>
+                  <p className="mt-2 text-sm">Загрузка...</p>
+                </div>
+              </div>
+            ) : history.length > 0 ? (
+              // Отображение списка, если есть данные
+              <div className="space-y-2">
+                {history.map((point, index) => (
+                  <div
+                    key={`${point.timestamp}-${index}`}
+                    className="bg-gray-800/50 p-2 rounded text-xs border border-green-500/10 hover:border-green-500/30 transition-colors"
+                  >
+                    <div className="flex justify-between items-center flex-wrap gap-1">
+                      <span className="text-gray-400 tech-font text-xs">
+                        {formatDate(point.timestamp)}
                       </span>
-                      <span
-                        title="Скорость"
-                        className="text-yellow-400 tech-font"
-                      >
-                        ➜{formatSpeed(point.speed)}
-                      </span>
-                      <span title="Курс" className="text-blue-400 tech-font">
-                        {point.heading.toFixed(0)}°
-                      </span>
+                      <div className="flex space-x-2 md:space-x-3 text-xs">
+                        <span
+                          title="Высота"
+                          className="text-green-400 tech-font"
+                        >
+                          ↑{formatAltitude(point.altitude)}
+                        </span>
+                        <span
+                          title="Скорость"
+                          className="text-yellow-400 tech-font"
+                        >
+                          ➜{formatSpeed(point.speed)}
+                        </span>
+                        <span title="Курс" className="text-blue-400 tech-font">
+                          {point.heading.toFixed(0)}°
+                        </span>
+                      </div>
+                    </div>
+                    <div className="text-gray-500 mt-1 tech-font text-xs break-all">
+                      {point.latitude.toFixed(6)}, {point.longitude.toFixed(6)}
                     </div>
                   </div>
-                  <div className="text-gray-500 mt-1 tech-font text-xs break-all">
-                    {point.latitude.toFixed(6)}, {point.longitude.toFixed(6)}
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-gray-500 text-center py-4">
-              История полётов недоступна
-            </p>
-          )}
+                ))}
+              </div>
+            ) : (
+              // Сообщение, если данных нет
+              <div
+                className="flex items-center justify-center"
+                style={{ height: "240px" }}
+              >
+                <p className="text-sm text-gray-500 text-center py-4">
+                  История полётов недоступна
+                </p>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

@@ -20,7 +20,7 @@ import * as signalR from "@microsoft/signalr";
 import { TbDrone } from "react-icons/tb";
 import { GiDeliveryDrone, GiRadioactive } from "react-icons/gi";
 import { MdWarning, MdClose, MdSettings } from "react-icons/md";
-import { HiOutlineFilter, HiOutlineViewList } from "react-icons/hi";
+import { HiOutlineFilter } from "react-icons/hi";
 import ReactDOMServer from "react-dom/server";
 import type {
   Drone,
@@ -35,6 +35,23 @@ import { FilterPanel } from "./../FilterPanel";
 import { MapControls } from "./../MapControls";
 import { DroneList } from "../DroneList";
 import { DroneHistoryPanel } from "../DroneHistoryPanel";
+
+// <-- ДОБАВЛЕНО: Компонент иконки "бургер" для переиспользования -->
+const HamburgerIcon = () => (
+  <svg
+    className="w-6 h-6"
+    fill="none"
+    stroke="currentColor"
+    viewBox="0 0 24 24"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M4 6h16M4 10h16M4 14h16M4 18h16"
+    />
+  </svg>
+);
 
 interface ActiveZoneInfo {
   zoneId: number;
@@ -172,8 +189,8 @@ export const DroneMap: React.FC = () => {
   const [mapType, setMapType] = useState<"osm" | "satellite">("osm");
   const [isConnected, setIsConnected] = useState(false);
   const [showDroneList, setShowDroneList] = useState(true);
-  const [showFilterPanel, setShowFilterPanel] = useState(false);
-  const [showMapControls, setShowMapControls] = useState(false);
+  const [showFilterPanel, setShowFilterPanel] = useState(true);
+  const [showMapControls, setShowMapControls] = useState(true);
   const [showHistory, setShowHistory] = useState(false);
   const [historyDroneId, setHistoryDroneId] = useState<number | null>(null);
   const [tooltip, setTooltip] = useState<{
@@ -184,6 +201,14 @@ export const DroneMap: React.FC = () => {
 
   const [activeZones, setActiveZones] = useState<ActiveZoneInfo[]>([]);
   const [isAlarmDismissed, setIsAlarmDismissed] = useState(false);
+
+  useEffect(() => {
+    if (window.innerWidth < 1024) {
+      setShowDroneList(false);
+      setShowFilterPanel(false);
+      setShowMapControls(false);
+    }
+  }, []);
 
   useEffect(() => {
     dronesRef.current = drones;
@@ -757,7 +782,7 @@ export const DroneMap: React.FC = () => {
   };
 
   return (
-    <div className="flex h-screen bg-gray-900 military-grid relative">
+    <div className="flex h-screen bg-gray-900 military-grid relative overflow-hidden">
       {/* Backdrop для мобильных панелей */}
       {(showDroneList || showFilterPanel || showMapControls) && (
         <div
@@ -767,26 +792,26 @@ export const DroneMap: React.FC = () => {
       )}
 
       {/* Левая панель фильтров */}
+      {/* <-- ИЗМЕНЕНО: Добавлен overflow-hidden для корректного скрытия --> */}
       <div
         className={`
-        fixed lg:static
-        inset-y-0 left-0
-        w-80
-        transform transition-transform duration-300 ease-in-out
-        z-40
-        ${
-          showFilterPanel
-            ? "translate-x-0"
-            : "-translate-x-full lg:translate-x-0"
-        }
+        flex-shrink-0
+        transition-all duration-300 ease-in-out
+        bg-gray-900
+        h-full
+        overflow-hidden
+        ${showFilterPanel ? "w-80" : "w-0"}
+        fixed lg:static inset-y-0 left-0 z-40
       `}
       >
-        <FilterPanel
-          filters={filters}
-          onFiltersChange={applyFilters}
-          stats={stats}
-          isConnected={isConnected}
-        />
+        <div className="w-80 h-full">
+          <FilterPanel
+            filters={filters}
+            onFiltersChange={applyFilters}
+            stats={stats}
+            isConnected={isConnected}
+          />
+        </div>
       </div>
 
       {/* Основная область карты */}
@@ -805,7 +830,29 @@ export const DroneMap: React.FC = () => {
           />
         )}
 
-        {/* Мобильные кнопки управления - ПЕРЕМЕЩЕНЫ В НИЗ СЛЕВА */}
+        {/* Кнопки управления панелями для десктопа */}
+        <div className="absolute top-20 left-4 hidden lg:flex flex-col space-y-2 z-20">
+          <button
+            onClick={() => setShowFilterPanel(!showFilterPanel)}
+            className="military-button p-3 rounded-lg text-green-400 hover:text-white shadow-xl backdrop-blur-sm bg-gray-900/90"
+            title={showFilterPanel ? "Скрыть фильтры" : "Показать фильтры"}
+          >
+            <HiOutlineFilter className="w-6 h-6" />
+          </button>
+          <button
+            onClick={() => setShowMapControls(!showMapControls)}
+            className="military-button p-3 rounded-lg text-green-400 hover:text-white shadow-xl backdrop-blur-sm bg-gray-900/90"
+            title={
+              showMapControls
+                ? "Скрыть настройки карты"
+                : "Показать настройки карты"
+            }
+          >
+            <MdSettings className="w-6 h-6" />
+          </button>
+        </div>
+
+        {/* Мобильные кнопки управления */}
         <div className="absolute bottom-4 left-4 flex flex-col space-y-2 z-20 lg:hidden">
           <button
             onClick={() => {
@@ -843,22 +890,19 @@ export const DroneMap: React.FC = () => {
             className="military-button p-3 rounded-lg text-green-400 hover:text-white shadow-xl backdrop-blur-sm bg-gray-900/90"
             title="Список дронов"
           >
-            <HiOutlineViewList className="w-6 h-6" />
+            <HamburgerIcon />
           </button>
         </div>
 
-        {/* MapControls - выдвижная панель снизу на мобильных, статичная на десктопе */}
+        {/* MapControls */}
         <div
           className={`
           fixed lg:absolute
           bottom-0 left-0 right-0 lg:bottom-4 lg:left-4 lg:right-auto
           transform transition-transform duration-300 ease-in-out
           z-40 lg:z-10
-          ${
-            showMapControls
-              ? "translate-y-0"
-              : "translate-y-full lg:translate-y-0"
-          }
+          ${showMapControls ? "translate-y-0" : "translate-y-full"}
+          ${!showMapControls && "hidden"}
         `}
         >
           <MapControls
@@ -874,7 +918,7 @@ export const DroneMap: React.FC = () => {
           />
         </div>
 
-        {/* DroneInfoPanel - ИСПРАВЛЕНО ПОЗИЦИОНИРОВАНИЕ */}
+        {/* DroneInfoPanel */}
         {selectedDrone && (
           <DroneInfoPanel
             drone={selectedDrone}
@@ -889,38 +933,43 @@ export const DroneMap: React.FC = () => {
         {/* Кнопка показа списка на десктопе */}
         <button
           onClick={() => setShowDroneList(!showDroneList)}
-          className="hidden lg:block absolute top-4 right-4 military-button p-3 rounded-lg text-green-400 hover:text-white z-10"
+          className="!hidden lg:!flex absolute top-4 right-4 military-button p-3 rounded-lg text-green-400 hover:text-white z-10"
           title={showDroneList ? "Скрыть список" : "Показать список"}
         >
-          <svg
-            className="w-6 h-6"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M4 6h16M4 10h16M4 14h16M4 18h16"
-            />
-          </svg>
+          <HamburgerIcon />
         </button>
+
+        {/* <div className="absolute bottom-4 right-4 z-20 lg:hidden">
+          <button
+            onClick={() => {
+              setShowDroneList(!showDroneList);
+              setShowFilterPanel(false);
+              setShowMapControls(false);
+            }}
+            className="military-button p-3 rounded-lg text-green-400 hover:text-white shadow-xl backdrop-blur-sm bg-gray-900/90"
+            title="Список дронов"
+          >
+            <HamburgerIcon />
+          </button>
+        </div> */}
       </div>
 
       {/* Правая панель списка дронов */}
       <div
         className={`
-        fixed lg:static
-        inset-y-0 right-0
-        w-full sm:w-96 lg:w-96
-        transform transition-transform duration-300 ease-in-out
-        z-40
-        ${showDroneList ? "translate-x-0" : "translate-x-full"}
-        ${!showDroneList && "lg:hidden"}
-      `}
+          bg-gray-900 h-full
+          transition-all duration-300 ease-in-out
+          
+          /* --- Стили для мобильных устройств (< 1024px) --- */
+          fixed inset-y-0 right-0 z-40 w-full sm:w-96
+          transform ${showDroneList ? "translate-x-0" : "translate-x-full"}
+          
+          /* --- Стили для десктопа (>= 1024px) --- */
+          lg:static lg:shrink-0 lg:transform-none
+          lg:overflow-hidden ${showDroneList ? "lg:w-96" : "lg:w-0"}
+        `}
       >
-        <div className="h-full flex flex-col">
+        <div className="w-full sm:w-96 lg:w-96 h-full flex flex-col">
           {/* Кнопка закрытия для мобильных */}
           <div className="lg:hidden flex justify-end p-2 bg-gray-900 border-b border-green-500/20">
             <button
