@@ -136,9 +136,10 @@ using (var scope = app.Services.CreateScope())
         }
         else
         {
-            logger.LogInformation("🚀 Production mode: Applying migrations...");
-            await context.Database.MigrateAsync();
-            logger.LogInformation("✅ Database migrations applied");
+            logger.LogInformation("🚀 Production mode: Ensuring database exists...");
+            // Используем EnsureCreated вместо Migrate, т.к. миграций нет
+            await context.Database.EnsureCreatedAsync();
+            logger.LogInformation("✅ Database created/verified");
         }
         
         if (!await context.Drones.AnyAsync())
