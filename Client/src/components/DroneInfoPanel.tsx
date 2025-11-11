@@ -27,6 +27,7 @@ ChartJS.register(
 interface DroneInfoPanelProps {
   drone: Drone;
   onClose: () => void;
+  isListVisible: boolean; // <-- ДОБАВЛЕНО: свойство для отслеживания видимости списка
 }
 
 interface HistoryPoint {
@@ -41,6 +42,7 @@ interface HistoryPoint {
 export const DroneInfoPanel: React.FC<DroneInfoPanelProps> = ({
   drone,
   onClose,
+  isListVisible, // <-- ДОБАВЛЕНО: получаем новое свойство
 }) => {
   const [history, setHistory] = useState<HistoryPoint[]>([]);
   const [loading, setLoading] = useState(false);
@@ -178,16 +180,19 @@ export const DroneInfoPanel: React.FC<DroneInfoPanelProps> = ({
 
   return (
     <div
-      className="
+      className={`
       fixed bottom-2 right-2 left-2
-      md:bottom-4 md:right-4 md:left-auto
+      md:bottom-4 md:left-auto ${
+        isListVisible ? "lg:right-[25rem]" : "md:right-4"
+      }
       w-auto md:w-96
       max-h-[80vh] md:max-h-[calc(100vh-6rem)]
       military-panel rounded-lg shadow-2xl
       animate-slideInRight
       flex flex-col overflow-hidden
       z-40
-    "
+      transition-all duration-300 ease-in-out
+    `}
     >
       {/* Заголовок */}
       <div

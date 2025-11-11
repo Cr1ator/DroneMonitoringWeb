@@ -876,24 +876,14 @@ export const DroneMap: React.FC = () => {
 
         {/* DroneInfoPanel - ИСПРАВЛЕНО ПОЗИЦИОНИРОВАНИЕ */}
         {selectedDrone && (
-          <div
-            className={`
-            fixed
-            bottom-4 right-4
-            md:bottom-6 md:right-6
-            z-50
-            max-w-[calc(100vw-2rem)]
-            md:max-w-md
-          `}
-          >
-            <DroneInfoPanel
-              drone={selectedDrone}
-              onClose={() => {
-                setSelectedDrone(null);
-                clearAllTrajectories();
-              }}
-            />
-          </div>
+          <DroneInfoPanel
+            drone={selectedDrone}
+            isListVisible={showDroneList}
+            onClose={() => {
+              setSelectedDrone(null);
+              clearAllTrajectories();
+            }}
+          />
         )}
 
         {/* Кнопка показа списка на десктопе */}
