@@ -10,10 +10,12 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container
 builder.Services.AddControllers();
 
-// Database с PostGIS
+// Database с PostGIS - используем переменную окружения или appsettings
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
 {
-    var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
+    // Приоритет: 1) Переменная окружения, 2) appsettings.json, 3) fallback для локальной разработки
+    var connectionString = Environment.GetEnvironmentVariable("DATABASE_CONNECTION_STRING")
+        ?? builder.Configuration.GetConnectionString("DefaultConnection")
         ?? "Host=localhost;Database=drone_monitoring;Username=postgres;Password=postgres";
     
     options.UseNpgsql(connectionString, x => x.UseNetTopologySuite());
@@ -30,12 +32,22 @@ builder.Services.AddSignalR(options =>
 // Фоновый сервис симуляции дронов
 builder.Services.AddHostedService<DroneSimulatorService>();
 
-// CORS для React (localhost:5173)
+// CORS - динамическая конфигурация для development и production
+var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
+    ?? new[] { "http://localhost:5173", "https://localhost:5173" };
+
+// Добавляем переменную окружения FRONTEND_URL если она есть
+var frontendUrl = Environment.GetEnvironmentVariable("FRONTEND_URL");
+if (!string.IsNullOrEmpty(frontendUrl))
+{
+    allowedOrigins = allowedOrigins.Append(frontendUrl).ToArray();
+}
+
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("DevCors", policy =>
+    options.AddPolicy("AppCors", policy =>
     {
-        policy.WithOrigins("http://localhost:5173", "https://localhost:5173")
+        policy.WithOrigins(allowedOrigins)
               .AllowAnyMethod()
               .AllowAnyHeader()
               .AllowCredentials();
@@ -48,8 +60,10 @@ var app = builder.Build();
 if (app.Environment.IsDevelopment())
 {
     app.UseDeveloperExceptionPage();
-    app.UseCors("DevCors"); // CORS только для development
 }
+
+// Используем CORS политику
+app.UseCors("AppCors");
 
 app.UseHttpsRedirection();
 
@@ -58,7 +72,7 @@ app.MapControllers();
 app.MapHub<DroneTrackingHub>("/droneHub");
 
 
-// --- ИЗМЕНЕНО: Вся секция инициализации и наполнения БД ---
+// --- Инициализация и наполнение БД ---
 using (var scope = app.Services.CreateScope())
 {
     var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
@@ -78,7 +92,6 @@ using (var scope = app.Services.CreateScope())
             {
                 logger.LogInformation("Seeding database...");
                 
-                // --- ИЗМЕНЕНО: Увеличено количество дронов для лучшей симуляции ---
                 var drones = new List<Drone>();
                 for (int i = 1; i <= 15; i++)
                 {
@@ -86,7 +99,7 @@ using (var scope = app.Services.CreateScope())
                     {
                         Name = $"Drone-{i:000}",
                         Frequency = (i % 3 == 0) ? "5.8 GHz" : "2.4 GHz",
-                        Status = "Inactive", // Все начинают как неактивные
+                        Status = "Inactive",
                         LastSeen = DateTime.UtcNow
                     });
                 }
@@ -94,12 +107,11 @@ using (var scope = app.Services.CreateScope())
                 context.Drones.AddRange(drones);
                 await context.SaveChangesAsync();
                 
-                // Добавляем зоны покрытия с новыми координатами
+                // Добавляем зоны покрытия
                 var geometryFactory = NtsGeometryServices.Instance.CreateGeometryFactory(srid: 4326);
                 
                 var zones = new[]
                 {
-                    // --- ИЗМЕНЕНО: Новые координаты и радиусы ---
                     new CoverageZone
                     {
                         Name = "Центральная зона",
@@ -127,6 +139,12 @@ using (var scope = app.Services.CreateScope())
                     drones.Count, zones.Length);
             }
         }
+        else
+        {
+            // В production применяем миграции без пересоздания БД
+            logger.LogInformation("Applying database migrations for production...");
+            await context.Database.MigrateAsync();
+        }
     }
     catch (Exception ex)
     {
@@ -135,36 +153,29 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.Logger.LogInformation("🚁 Drone Monitoring API started with real-time updates");
+app.Logger.LogInformation("Environment: {Environment}", app.Environment.EnvironmentName);
+app.Logger.LogInformation("Allowed CORS Origins: {Origins}", string.Join(", ", allowedOrigins));
 
 app.Run();
 
-// --- ИЗМЕНЕНО: Полностью переписанный метод для создания геодезически-корректного круга ---
 static Polygon CreateGeodesicCirclePolygon(GeometryFactory factory, double centerLon, double centerLat, double radiusMeters)
 {
-    const int segments = 64; // Больше сегментов для более гладкого круга
+    const int segments = 64;
     var coordinates = new Coordinate[segments + 1];
     
-    // Константы для расчетов
     const double metersPerDegreeLat = 111320.0;
     double metersPerDegreeLon = metersPerDegreeLat * Math.Cos(centerLat * Math.PI / 180.0);
 
     for (int i = 0; i < segments; i++)
     {
         var angle = (2 * Math.PI * i) / segments;
-        
-        // Вычисляем смещение в метрах
         var offsetX = radiusMeters * Math.Cos(angle);
         var offsetY = radiusMeters * Math.Sin(angle);
-        
-        // Конвертируем смещение в метрах в смещение в градусах
         var lon = centerLon + offsetX / metersPerDegreeLon;
         var lat = centerLat + offsetY / metersPerDegreeLat;
-        
         coordinates[i] = new Coordinate(lon, lat);
     }
     
-    // Замыкаем полигон, чтобы он был валидным
     coordinates[segments] = coordinates[0];
-    
     return factory.CreatePolygon(coordinates);
 }

@@ -479,8 +479,9 @@ export const DroneMap: React.FC = () => {
   }, [activeZones]);
 
   useEffect(() => {
+    const hubUrl = import.meta.env.VITE_HUB_URL || "/droneHub";
     const connection = new signalR.HubConnectionBuilder()
-      .withUrl("http://localhost:5216/droneHub")
+      .withUrl(hubUrl)
       .withAutomaticReconnect([0, 2000, 5000, 10000])
       .configureLogging(signalR.LogLevel.Information)
       .build();
