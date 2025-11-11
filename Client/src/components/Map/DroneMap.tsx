@@ -1368,9 +1368,9 @@ const createDroneIconDataUri = (status: string) => {
 
   const svgString = ReactDOMServer.renderToStaticMarkup(
     <svg
-      width="36"
-      height="36"
-      viewBox="0 0 36 36"
+      width="40"
+      height="40"
+      viewBox="0 0 40 40"
       xmlns="http://www.w3.org/2000/svg"
     >
       {status === "Active" && (
@@ -1407,14 +1407,15 @@ const createDroneIconDataUri = (status: string) => {
         stroke="#ffffff"
         strokeWidth="1.5"
       />
-      <g transform="translate(20, 20) scale(1.3)">
-        <GiDeliveryDrone
-          style={{
-            color: "#ffffff",
-            fontSize: "14px",
-            transform: "translate(-7px, -7px)",
-          }}
-        />
+      <g transform="translate(20, 20)">
+        <g transform="scale(1.3) translate(-7, -7)">
+          <GiDeliveryDrone
+            style={{
+              color: "#ffffff",
+              fontSize: "14px",
+            }}
+          />
+        </g>
       </g>
     </svg>
   );
@@ -1435,8 +1436,6 @@ function createDroneStyle(feature: FeatureLike): Style {
       scale: 1,
       rotation: rotation,
       anchor: [0.5, 0.5],
-      anchorXUnits: "fraction",
-      anchorYUnits: "fraction",
       rotateWithView: true,
     }),
     text: new Text({
