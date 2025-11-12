@@ -221,34 +221,34 @@ export const MapControls: React.FC<MapControlsProps> = ({
 
         {/* Кнопки быстрых действий */}
         <div className="pt-3 border-t border-green-500/20">
-          <div className="grid grid-cols-3 gap-2">
+          <div className="flex gap-2">
             <button
               onClick={onCenterMap}
-              className="px-2 py-2 military-button rounded text-green-400 text-xs font-semibold uppercase tracking-wider hover:bg-green-500/20 flex items-center justify-center"
+              className="flex-1 px-2 py-2 military-button rounded text-green-400 text-xs font-semibold uppercase tracking-wider hover:bg-green-500/20 flex items-center justify-center whitespace-nowrap"
               title="Центрировать карту на Минске"
             >
-              <PiMapPinSimpleAreaBold className="w-4 h-4 mr-1" />
-              Центр
+              <PiMapPinSimpleAreaBold className="w-4 h-4 mr-1 shrink-0" />
+              <span className="truncate">Центр</span>
             </button>
             <button
               onClick={onResetZoom}
-              className="px-2 py-2 military-button rounded text-green-400 text-xs font-semibold uppercase tracking-wider hover:bg-green-500/20 flex items-center justify-center"
+              className="flex-1 px-2 py-2 military-button rounded text-green-400 text-xs font-semibold uppercase tracking-wider hover:bg-green-500/20 flex items-center justify-center whitespace-nowrap"
               title="Сбросить масштаб"
             >
-              <PiMagnifyingGlassBold className="w-4 h-4 mr-1" />
-              Сброс
+              <PiMagnifyingGlassBold className="w-4 h-4 mr-1 shrink-0" />
+              <span className="truncate">Сброс</span>
             </button>
             <button
               onClick={onToggleRuler}
-              className={`px-2 py-2 military-button rounded text-xs font-semibold uppercase tracking-wider flex items-center justify-center ${
+              className={`flex-1 px-2 py-2 military-button rounded text-xs font-semibold uppercase tracking-wider flex items-center justify-center whitespace-nowrap ${
                 isRulerActive
                   ? "bg-green-500/40 text-white"
                   : "text-green-400 hover:bg-green-500/20"
               }`}
               title="Включить/выключить линейку"
             >
-              <PiRulerBold className="w-4 h-4 mr-1" />
-              Линейка
+              <PiRulerBold className="w-4 h-4 mr-1 shrink-0" />
+              <span className="truncate">Линейка</span>
             </button>
           </div>
         </div>

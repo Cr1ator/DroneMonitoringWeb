@@ -866,16 +866,34 @@ export const DroneMap: React.FC = () => {
     }
 
     const geometry = feature.getGeometry() as LineString;
+    if (!geometry) {
+      setRulerData(null);
+      return;
+    }
+
     const coordinates = geometry.getCoordinates();
+
+    console.log("--- Обновление измерений ---");
+    console.log("Координаты:", JSON.stringify(coordinates));
+
+    // --- ФИНАЛЬНОЕ ИСПРАВЛЕНИЕ ЗДЕСЬ ---
+    // Проверяем, что структура данных соответствует LineString (массив массивов).
+    // Если первый элемент не массив, значит это временное состояние (как Point),
+    // и мы просто пропускаем это обновление, чтобы избежать сброса на 0.
+    if (
+      !coordinates ||
+      coordinates.length === 0 ||
+      !Array.isArray(coordinates[0])
+    ) {
+      console.warn(
+        "Получены некорректные или временные координаты. Обновление пропущено."
+      );
+      return; // Не обновляем состояние, ждем следующего корректного вызова
+    }
+
     if (coordinates.length < 2) {
-      setRulerData({
-        totalDistance: 0,
-        segmentDistances: [],
-        coordinates: coordinates.map((c) => ({
-          lon: toLonLat(c)[0],
-          lat: toLonLat(c)[1],
-        })),
-      });
+      console.log("Недостаточно координат для измерений.");
+      setRulerData({ totalDistance: 0, segmentDistances: [], coordinates: [] });
       return;
     }
 
@@ -884,11 +902,35 @@ export const DroneMap: React.FC = () => {
     let totalDistance = 0;
     const segmentDistances: number[] = [];
 
+    const oldKeys = feature
+      .getKeys()
+      .filter((k) => k.startsWith("segment_dist_"));
+    oldKeys.forEach((key) => feature.unset(key, true));
+
     for (let i = 0; i < lonLatCoords.length - 1; i++) {
-      const dist = getGeodesicDistance(lonLatCoords[i], lonLatCoords[i + 1]);
-      segmentDistances.push(dist);
-      totalDistance += dist;
+      const p1 = lonLatCoords[i];
+      const p2 = lonLatCoords[i + 1];
+
+      if (p1 && p2) {
+        const dist = getGeodesicDistance(p1, p2);
+
+        if (!isNaN(dist)) {
+          segmentDistances.push(dist);
+          totalDistance += dist;
+          feature.set(`segment_dist_${i}`, dist);
+        } else {
+          console.warn(
+            `Ошибка вычисления дистанции для сегмента ${i}. Координаты:`,
+            p1,
+            p2
+          );
+        }
+      }
     }
+
+    console.log("Посчитанные дистанции:", segmentDistances);
+    console.log("Общая дистанция:", totalDistance);
+    console.log("--------------------------");
 
     setRulerData({
       totalDistance,
@@ -901,74 +943,21 @@ export const DroneMap: React.FC = () => {
     const map = mapInstanceRef.current;
     if (!map) return;
 
-    const cleanupInteractions = () => {
-      if (rulerInteractionsRef.current.draw)
-        map.removeInteraction(rulerInteractionsRef.current.draw);
-      if (rulerInteractionsRef.current.modify)
-        map.removeInteraction(rulerInteractionsRef.current.modify);
-      rulerInteractionsRef.current = {};
-    };
+    // --- НАЧАЛО ИСПРАВЛЕНИЯ ---
 
-    if (isRulerActive) {
-      if (!rulerLayerRef.current) {
-        const source = new VectorSource();
-        const layer = new VectorLayer({
-          source: source,
-          style: (feat) => createRulerStyle(feat, selectedVertexIndex),
-          zIndex: 200,
-        });
-        map.addLayer(layer);
-        rulerLayerRef.current = layer;
-      }
+    // Шаг 1: Полностью очищаем ВСЕ предыдущие взаимодействия линейки.
+    // Это гарантирует, что Draw и Modify никогда не будут активны одновременно.
+    if (rulerInteractionsRef.current.draw) {
+      map.removeInteraction(rulerInteractionsRef.current.draw);
+      rulerInteractionsRef.current.draw = undefined;
+    }
+    if (rulerInteractionsRef.current.modify) {
+      map.removeInteraction(rulerInteractionsRef.current.modify);
+      rulerInteractionsRef.current.modify = undefined;
+    }
 
-      cleanupInteractions();
-
-      if (rulerMode === "drawing") {
-        const source = rulerLayerRef.current.getSource();
-        if (!source) return;
-
-        const draw = new Draw({
-          source: source,
-          type: "Point",
-          style: rulerCursorStyle,
-        });
-
-        draw.on("drawend", (event) => {
-          const pointGeom = event.feature.getGeometry() as Point;
-          const coord = pointGeom.getCoordinates();
-
-          source.removeFeature(event.feature);
-
-          if (!rulerFeatureRef.current) {
-            const newLine = new LineString([coord]);
-            rulerFeatureRef.current = new Feature(newLine);
-            source.addFeature(rulerFeatureRef.current);
-          } else {
-            const lineGeom =
-              rulerFeatureRef.current.getGeometry() as LineString;
-            lineGeom.appendCoordinate(coord);
-          }
-          updateRulerMeasurements(rulerFeatureRef.current);
-        });
-
-        map.addInteraction(draw);
-        rulerInteractionsRef.current.draw = draw;
-      } else if (rulerMode === "modifying") {
-        const isDesktop = window.innerWidth >= 1024;
-        if (isDesktop) {
-          const source = rulerLayerRef.current.getSource();
-          if (!source) return;
-          const modify = new Modify({ source: source });
-          modify.on("modifyend", (event) => {
-            const feature = event.features.getArray()[0];
-            if (feature) updateRulerMeasurements(feature);
-          });
-          map.addInteraction(modify);
-          rulerInteractionsRef.current.modify = modify;
-        }
-      }
-    } else {
-      cleanupInteractions();
+    // Шаг 2: Если линейка вообще не активна, удаляем слой и выходим.
+    if (!isRulerActive) {
       if (rulerLayerRef.current) {
         rulerLayerRef.current.getSource()?.clear();
         map.removeLayer(rulerLayerRef.current);
@@ -978,10 +967,79 @@ export const DroneMap: React.FC = () => {
       updateRulerMeasurements(null);
       setSelectedVertexIndex(null);
       setIsMovingVertex(false);
+      return; // Важно выйти здесь
     }
 
+    // Шаг 3: Если линейка активна, убеждаемся, что слой существует.
+    if (!rulerLayerRef.current) {
+      const source = new VectorSource();
+      const layer = new VectorLayer({
+        source: source,
+        style: (feat) => createRulerStyle(feat, selectedVertexIndex),
+        zIndex: 200,
+      });
+      map.addLayer(layer);
+      rulerLayerRef.current = layer;
+    }
+    const source = rulerLayerRef.current.getSource();
+    if (!source) return;
+
+    // Шаг 4: Добавляем ТОЛЬКО ОДНО нужное взаимодействие в зависимости от режима.
+    if (rulerMode === "drawing") {
+      const draw = new Draw({
+        source: source,
+        type: "Point",
+        style: rulerCursorStyle,
+      });
+
+      draw.on("drawend", (event) => {
+        const pointGeom = event.feature.getGeometry() as Point;
+        const coord = pointGeom.getCoordinates();
+        source.removeFeature(event.feature);
+
+        if (!rulerFeatureRef.current) {
+          const newLine = new LineString([coord]);
+          rulerFeatureRef.current = new Feature(newLine);
+          source.addFeature(rulerFeatureRef.current);
+        } else {
+          const lineGeom = rulerFeatureRef.current.getGeometry() as LineString;
+          lineGeom.appendCoordinate(coord);
+        }
+        updateRulerMeasurements(rulerFeatureRef.current);
+      });
+
+      map.addInteraction(draw);
+      rulerInteractionsRef.current.draw = draw;
+    } else if (rulerMode === "modifying") {
+      const modify = new Modify({ source: source });
+
+      modify.on("modifyend", (event) => {
+        // Ищем именно Feature с LineString, игнорируя временные Point'ы
+        const features = event.features.getArray();
+        const lineFeature = features.find((f) => {
+          const geom = f.getGeometry();
+          return geom && geom.getType() === "LineString";
+        });
+
+        if (lineFeature) {
+          updateRulerMeasurements(lineFeature as Feature<LineString>);
+        }
+      });
+
+      map.addInteraction(modify);
+      rulerInteractionsRef.current.modify = modify;
+    }
+
+    // --- КОНЕЦ ИСПРАВЛЕНИЯ ---
+
+    // Функция очистки для useEffect, которая будет вызвана при размонтировании
     return () => {
-      cleanupInteractions();
+      if (rulerInteractionsRef.current.draw) {
+        map.removeInteraction(rulerInteractionsRef.current.draw);
+      }
+      if (rulerInteractionsRef.current.modify) {
+        map.removeInteraction(rulerInteractionsRef.current.modify);
+      }
     };
   }, [isRulerActive, rulerMode, updateRulerMeasurements, selectedVertexIndex]);
 
@@ -1075,8 +1133,17 @@ export const DroneMap: React.FC = () => {
 
     const lineGeom = rulerFeatureRef.current.getGeometry() as LineString;
     const coords = lineGeom.getCoordinates();
-    coords[selectedVertexIndex] = newCoord;
-    lineGeom.setCoordinates(coords);
+
+    // Вместо прямого изменения массива, создаем новый.
+    // Это гарантирует, что OpenLayers корректно обнаружит изменения.
+    const newCoords = [
+      ...coords.slice(0, selectedVertexIndex),
+      newCoord,
+      ...coords.slice(selectedVertexIndex + 1),
+    ];
+
+    lineGeom.setCoordinates(newCoords);
+
     updateRulerMeasurements(rulerFeatureRef.current);
 
     setIsMovingVertex(false);
@@ -1573,7 +1640,14 @@ const createRulerStyle = (
   for (let i = 0; i < coordinates.length - 1; i++) {
     const p1 = coordinates[i];
     const p2 = coordinates[i + 1];
-    const distance = getGeodesicDistance(toLonLat(p1), toLonLat(p2));
+
+    // --- ИЗМЕНЕНИЕ ЗДЕСЬ ---
+    // Больше не считаем дистанцию, а берем готовое значение
+    const distance = feature.get(`segment_dist_${i}`);
+
+    // Если по какой-то причине дистанции еще нет, ничего не показываем
+    if (distance === undefined || distance === null) continue;
+
     const text =
       distance < 1000
         ? `${distance.toFixed(0)} м`
