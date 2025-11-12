@@ -11,14 +11,24 @@ obj/
 *.csproj.user
 launchSettings.json
 
+# === .NET Configuration ===
+appsettings.Development.json
+appsettings.Production.json
+
 # === Node / React ===
 node_modules/
 dist/
 build/
+npm-debug.log*
+
+# === Environment Variables ===
 .env
 .env.local
+.env.development.local
+.env.test.local
+.env.production.local
 .env.*.local
-npm-debug.log*
+!.env.example
 
 # === IDE ===
 .idea/
@@ -34,3 +44,9 @@ logs/
 # === Database ===
 *.db
 *.sqlite
+*.sqlite3
+
+# === Temporary files ===
+*.tmp
+*.temp
+.cache/

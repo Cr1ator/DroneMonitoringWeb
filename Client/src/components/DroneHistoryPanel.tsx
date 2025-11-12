@@ -23,8 +23,9 @@ export const DroneHistoryPanel: React.FC<DroneHistoryPanelProps> = ({
   const loadHistory = async () => {
     setLoading(true);
     try {
+      const apiUrl = import.meta.env.VITE_API_URL || "";
       const response = await fetch(
-        `http://localhost:5216/api/drones/${droneId}/history?hours=${timeRange}&limit=50`
+        `${apiUrl}/api/drones/${droneId}/history?hours=${timeRange}&limit=50`
       );
       if (response.ok) {
         const data = await response.json();

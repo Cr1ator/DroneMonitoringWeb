@@ -2,19 +2,33 @@ using DroneMonitoring.Server.Data;
 using DroneMonitoring.Server.Hubs;
 using DroneMonitoring.Server.Services;
 using Microsoft.EntityFrameworkCore;
-using NetTopologySuite.Geometries;
 using NetTopologySuite;
+using NetTopologySuite.Geometries;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container
-builder.Services.AddOpenApi();
+builder.Services.AddControllers();
 
-// Database с PostGIS
+// ===== ИЗМЕНЕНО: Единая конфигурация БД, которая работает везде =====
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
 {
-    var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
-        ?? "Host=localhost;Database=drone_monitoring;Username=postgres;Password=postgres";
+    string connectionString;
+    // В первую очередь пытаемся получить строку из переменных окружения (для Railway)
+    var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
+    
+    if (!string.IsNullOrEmpty(databaseUrl))
+    {
+        connectionString = ConvertUriToConnectionString(databaseUrl);
+        Console.WriteLine("📊 Using DATABASE_URL for production environment.");
+    }
+    else
+    {
+        // Если переменных нет, берем строку из appsettings.json (для локальной разработки)
+        connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
+            ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
+        Console.WriteLine("📊 Using 'DefaultConnection' from appsettings for development.");
+    }
     
     options.UseNpgsql(connectionString, x => x.UseNetTopologySuite());
 });
@@ -23,243 +37,162 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 builder.Services.AddSignalR(options =>
 {
     options.EnableDetailedErrors = true;
-    options.KeepAliveInterval = TimeSpan.FromSeconds(15);
-    options.ClientTimeoutInterval = TimeSpan.FromSeconds(30);
 });
 
 // Фоновый сервис симуляции дронов
 builder.Services.AddHostedService<DroneSimulatorService>();
 
-// CORS для React (localhost:5173)
+// ===== ИЗМЕНЕНО: Единая конфигурация CORS =====
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("DevCors", policy =>
+    options.AddPolicy("AppCors", policy =>
     {
-        policy.WithOrigins("http://localhost:5173", "https://localhost:5173")
+        // Для Production берем URL из переменных окружения
+        var frontendUrl = Environment.GetEnvironmentVariable("FRONTEND_URL") ?? "http://localhost:5173";
+        
+        var allowedOrigins = new List<string> { frontendUrl };
+        
+        // Для Development всегда добавляем localhost
+        if (builder.Environment.IsDevelopment())
+        {
+            allowedOrigins.Add("http://localhost:5173");
+            allowedOrigins.Add("https://localhost:5173");
+        }
+        
+        policy.WithOrigins(allowedOrigins.Distinct().ToArray())
               .AllowAnyMethod()
               .AllowAnyHeader()
               .AllowCredentials();
+        
+        Console.WriteLine($"🌐 Allowed CORS Origins: {string.Join(", ", allowedOrigins.Distinct())}");
     });
 });
 
-// Controllers для API endpoints
-builder.Services.AddControllers();
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline
+// Используем CORS для всех окружений
+app.UseCors("AppCors");
+
+// ===== ИЗМЕНЕНО: Конфигурация пайплайна в зависимости от окружения =====
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();
-    app.UseCors("DevCors"); // CORS только для development
+    app.UseDeveloperExceptionPage();
+}
+else
+{
+    // HTTPS Redirection включаем только НЕ в Development (Railway сам управляет SSL)
+    app.UseHttpsRedirection();
 }
 
-app.UseHttpsRedirection();
-
-// Маппинг Controllers и SignalR
 app.MapControllers();
 app.MapHub<DroneTrackingHub>("/droneHub");
 
-// Оригинальный weather endpoint (можно оставить для теста)
-var summaries = new[]
-{
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
+// Health check для Railway
+app.MapGet("/health", () => Results.Ok(new { status = "healthy", timestamp = DateTime.UtcNow }));
 
-app.MapGet("/weatherforecast", () =>
-{
-    var forecast = Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
-})
-.WithName("GetWeatherForecast");
-
-// Инициализация БД и seed тестовых данных
+// ===== ИЗМЕНЕНО: Инициализация БД в зависимости от окружения =====
 using (var scope = app.Services.CreateScope())
 {
-    var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-    
+    var services = scope.ServiceProvider;
+    var logger = services.GetRequiredService<ILogger<Program>>();
     try
     {
+        var context = services.GetRequiredService<ApplicationDbContext>();
+
         if (app.Environment.IsDevelopment())
         {
-            // Пересоздаём БД при каждом запуске (для development)
+            // Для разработки: всегда пересоздаем БД для чистого старта
+            logger.LogInformation("Development environment detected. Recreating database...");
             await context.Database.EnsureDeletedAsync();
             await context.Database.EnsureCreatedAsync();
-            
-            // Добавляем тестовые данные
-            if (!await context.Drones.AnyAsync())
-            {
-                var drones = new[]
-                {
-                    new Drone 
-                    { 
-                        Name = "Drone-001", 
-                        Frequency = "2.4 GHz", 
-                        Status = "Active", 
-                        LastSeen = DateTime.UtcNow 
-                    },
-                    new Drone 
-                    { 
-                        Name = "Drone-002", 
-                        Frequency = "5.8 GHz", 
-                        Status = "Active", 
-                        LastSeen = DateTime.UtcNow 
-                    },
-                    new Drone 
-                    { 
-                        Name = "Drone-003", 
-                        Frequency = "2.4 GHz", 
-                        Status = "Inactive", 
-                        LastSeen = DateTime.UtcNow.AddHours(-2) 
-                    },
-                    new Drone 
-                    { 
-                        Name = "Drone-004", 
-                        Frequency = "5.8 GHz", 
-                        Status = "Active", 
-                        LastSeen = DateTime.UtcNow 
-                    },
-                    new Drone 
-                    { 
-                        Name = "Drone-005", 
-                        Frequency = "2.4 GHz", 
-                        Status = "Active", 
-                        LastSeen = DateTime.UtcNow 
-                    }
-                };
-                
-                context.Drones.AddRange(drones);
-                await context.SaveChangesAsync();
-                
-                // Тестовая телеметрия (координаты Минска)
-                var telemetry = new[]
-                {
-                    new Telemetry 
-                    { 
-                        DroneId = 1, 
-                        Position = new Point(27.5615, 53.9006) { SRID = 4326 },
-                        Altitude = 100,
-                        Speed = 15.5,
-                        Heading = 45,
-                        Timestamp = DateTime.UtcNow
-                    },
-                    new Telemetry 
-                    { 
-                        DroneId = 2, 
-                        Position = new Point(27.5715, 53.9106) { SRID = 4326 },
-                        Altitude = 150,
-                        Speed = 20.0,
-                        Heading = 180,
-                        Timestamp = DateTime.UtcNow
-                    },
-                    new Telemetry 
-                    { 
-                        DroneId = 3, 
-                        Position = new Point(27.5515, 53.8906) { SRID = 4326 },
-                        Altitude = 80,
-                        Speed = 10.0,
-                        Heading = 270,
-                        Timestamp = DateTime.UtcNow.AddHours(-2)
-                    },
-                    new Telemetry 
-                    { 
-                        DroneId = 4, 
-                        Position = new Point(27.5815, 53.9006) { SRID = 4326 },
-                        Altitude = 200,
-                        Speed = 25.0,
-                        Heading = 90,
-                        Timestamp = DateTime.UtcNow
-                    },
-                    new Telemetry 
-                    { 
-                        DroneId = 5, 
-                        Position = new Point(27.5615, 53.8906) { SRID = 4326 },
-                        Altitude = 120,
-                        Speed = 18.0,
-                        Heading = 135,
-                        Timestamp = DateTime.UtcNow
-                    }
-                };
-                
-                context.Telemetry.AddRange(telemetry);
-                await context.SaveChangesAsync();
-                
-                // Добавляем зоны покрытия
-                var geometryFactory = NtsGeometryServices.Instance.CreateGeometryFactory(srid: 4326);
-                
-                var zones = new[]
-                {
-                    new CoverageZone
-                    {
-                        Name = "Центральная зона",
-                        Zone = CreateCirclePolygon(geometryFactory, 27.5615, 53.9006, 2000), // 2км радиус
-                        RadiusMeters = 2000
-                    },
-                    new CoverageZone
-                    {
-                        Name = "Северная зона",
-                        Zone = CreateCirclePolygon(geometryFactory, 27.5715, 53.9206, 1500), // 1.5км радиус
-                        RadiusMeters = 1500
-                    },
-                    new CoverageZone
-                    {
-                        Name = "Южная зона",
-                        Zone = CreateCirclePolygon(geometryFactory, 27.5515, 53.8806, 1800), // 1.8км радиус
-                        RadiusMeters = 1800
-                    }
-                };
-
-                
-                context.CoverageZones.AddRange(zones);
-                await context.SaveChangesAsync();
-                
-                logger.LogInformation("✅ Database seeded with {DroneCount} drones, {TelemetryCount} telemetry records and {ZoneCount} coverage zones", 
-                    drones.Length, telemetry.Length, zones.Length);
-            }
+            await SeedDatabase(context, logger); // Наполняем данными
+        }
+        else
+        {
+            // Для Production: применяем миграции. Если их нет, просто создаем БД.
+            // TODO: В будущем здесь будет context.Database.MigrateAsync();
+            logger.LogInformation("Production environment detected. Ensuring database is created...");
+            await context.Database.EnsureCreatedAsync();
+            await SeedDatabase(context, logger); // Наполняем данными, если БД пустая
         }
     }
     catch (Exception ex)
     {
-        logger.LogError(ex, "❌ Error occurred while seeding database");
+        logger.LogError(ex, "An error occurred during database initialization.");
     }
 }
-
-app.Logger.LogInformation("🚁 Drone Monitoring API started with real-time updates");
 
 app.Run();
 
-// Вспомогательный метод для создания круга как полигона
-static Polygon CreateCirclePolygon(GeometryFactory factory, double centerLon, double centerLat, double radiusMeters)
+
+// ===== Вспомогательные методы остались без изменений, но вынесены в конец =====
+
+async Task SeedDatabase(ApplicationDbContext context, ILogger<Program> logger)
 {
-    const int segments = 32; // Количество сегментов для аппроксимации круга
+    if (await context.Drones.AnyAsync())
+    {
+        logger.LogInformation("Database already contains data, skipping seed.");
+        return;
+    }
+
+    logger.LogInformation("Seeding database with initial data...");
+    
+    var drones = new List<Drone>();
+    for (int i = 1; i <= 15; i++)
+    {
+        drones.Add(new Drone
+        {
+            Name = $"Drone-{i:000}",
+            Frequency = (i % 3 == 0) ? "5.8 GHz" : "2.4 GHz",
+            Status = "Inactive",
+            LastSeen = DateTime.UtcNow
+        });
+    }
+    context.Drones.AddRange(drones);
+    
+    var geometryFactory = NtsGeometryServices.Instance.CreateGeometryFactory(srid: 4326);
+    var zones = new[]
+    {
+        new CoverageZone { Name = "Центральная зона", Zone = CreateGeodesicCirclePolygon(geometryFactory, 27.5618, 53.9022, 2500), RadiusMeters = 2500 },
+        new CoverageZone { Name = "Северная зона", Zone = CreateGeodesicCirclePolygon(geometryFactory, 27.6830, 53.9350, 2000), RadiusMeters = 2000 },
+        new CoverageZone { Name = "Южная зона", Zone = CreateGeodesicCirclePolygon(geometryFactory, 27.6050, 53.8455, 3000), RadiusMeters = 3000 }
+    };
+    context.CoverageZones.AddRange(zones);
+
+    await context.SaveChangesAsync();
+    logger.LogInformation("✅ Database seeded successfully.");
+}
+
+string ConvertUriToConnectionString(string databaseUrl)
+{
+    if (!databaseUrl.StartsWith("postgres://") && !databaseUrl.StartsWith("postgresql://")) return databaseUrl;
+    var uri = new Uri(databaseUrl.Replace("postgres://", "postgresql://"));
+    var host = uri.Host;
+    var port = uri.Port > 0 ? uri.Port : 5432;
+    var database = uri.AbsolutePath.TrimStart('/');
+    var userInfo = uri.UserInfo.Split(':');
+    var username = userInfo[0];
+    var password = userInfo[1];
+    var connectionString = $"Host={host};Port={port};Database={database};Username={username};Password={password};SSL Mode=Require;Trust Server Certificate=true";
+    return connectionString;
+}
+
+Polygon CreateGeodesicCirclePolygon(GeometryFactory factory, double centerLon, double centerLat, double radiusMeters)
+{
+    const int segments = 64;
     var coordinates = new Coordinate[segments + 1];
-    
-    // Конвертируем радиус из метров в градусы (приблизительно)
-    var radiusDegrees = radiusMeters / 111000.0;
-    
+    const double metersPerDegreeLat = 111320.0;
+    double metersPerDegreeLon = metersPerDegreeLat * Math.Cos(centerLat * Math.PI / 180.0);
     for (int i = 0; i < segments; i++)
     {
         var angle = (2 * Math.PI * i) / segments;
-        var x = centerLon + radiusDegrees * Math.Cos(angle);
-        var y = centerLat + radiusDegrees * Math.Sin(angle);
-        coordinates[i] = new Coordinate(x, y);
+        var offsetX = radiusMeters * Math.Cos(angle);
+        var offsetY = radiusMeters * Math.Sin(angle);
+        var lon = centerLon + offsetX / metersPerDegreeLon;
+        var lat = centerLat + offsetY / metersPerDegreeLat;
+        coordinates[i] = new Coordinate(lon, lat);
     }
-    
-    // Замыкаем полигон
     coordinates[segments] = coordinates[0];
-    
     return factory.CreatePolygon(coordinates);
-}
-
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
 }

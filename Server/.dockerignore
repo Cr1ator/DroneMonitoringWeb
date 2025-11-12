@@ -1,0 +1,37 @@
+# .dockerignore для Server папки
+# Размещение: Server/.dockerignore
+
+# .NET Build артефакты
+bin/
+obj/
+*.dll
+*.pdb
+*.user
+*.suo
+
+# IDE
+.vs/
+.vscode/
+.idea/
+
+# Logs
+*.log
+logs/
+
+# Environment files
+*.env
+*.env.local
+appsettings.Development.json
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Documentation
+*.md
+README.md
+
+# Tests
+*Tests/
+*.Tests/

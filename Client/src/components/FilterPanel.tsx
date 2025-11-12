@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { MdClose } from "react-icons/md";
 import type { DroneFilters, DroneStats } from "../types/drone";
 
 interface FilterPanelProps {
@@ -6,6 +7,7 @@ interface FilterPanelProps {
   onFiltersChange: (filters: DroneFilters) => void;
   stats: DroneStats | null;
   isConnected: boolean;
+  onClose?: () => void;
 }
 
 export const FilterPanel: React.FC<FilterPanelProps> = ({
@@ -13,6 +15,7 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
   onFiltersChange,
   stats,
   isConnected,
+  onClose,
 }) => {
   const [localFilters, setLocalFilters] = useState<DroneFilters>(filters);
 
@@ -49,12 +52,27 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
     <div className="w-80 military-panel overflow-y-auto military-scroll flex flex-col h-full">
       {/* Заголовок и статус подключения */}
       <div className="military-header px-4 py-3">
-        <h1 className="text-green-400 font-bold mb-2 flex items-center text-sm uppercase">
-          <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
-            <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
-          </svg>
-          Drone Monitoring
-        </h1>
+        <div className="flex items-center justify-between mb-2">
+          <h1 className="text-green-400 font-bold flex items-center text-sm uppercase">
+            <svg
+              className="w-5 h-5 mr-2"
+              fill="currentColor"
+              viewBox="0 0 20 20"
+            >
+              <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
+            </svg>
+            Drone Monitoring
+          </h1>
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="lg:hidden military-button p-1.5 rounded text-green-400 hover:text-white"
+              title="Закрыть"
+            >
+              <MdClose className="w-5 h-5" />
+            </button>
+          )}
+        </div>
         <div className="flex items-center">
           <span
             className={`inline-block w-3 h-3 rounded-full mr-2 ${
@@ -168,7 +186,7 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
                 type="checkbox"
                 checked={localFilters.statusFilter.includes("Active")}
                 onChange={() => handleStatusChange("Active")}
-                className="mr-3 w-4 h-4 text-green-500 bg-gray-700 border-gray-600 rounded focus:ring-green-500"
+                className="mr-3 w-4 h-4 military-checkbox text-green-500 bg-gray-700 border-gray-600 rounded focus:ring-green-500"
               />
               <span className="flex items-center flex-1">
                 <span className="w-3 h-3 bg-green-500 rounded-full mr-2 status-active"></span>
@@ -188,7 +206,7 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
                 type="checkbox"
                 checked={localFilters.statusFilter.includes("Inactive")}
                 onChange={() => handleStatusChange("Inactive")}
-                className="mr-3 w-4 h-4 text-red-500 bg-gray-700 border-gray-600 rounded focus:ring-red-500"
+                className="mr-3 w-4 h-4 military-checkbox text-red-500 bg-gray-700 border-gray-600 rounded focus:ring-red-500"
               />
               <span className="flex items-center flex-1">
                 <span className="w-3 h-3 bg-red-500 rounded-full mr-2"></span>
@@ -216,7 +234,7 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
                 type="checkbox"
                 checked={localFilters.frequencyFilter.includes("2.4 GHz")}
                 onChange={() => handleFrequencyChange("2.4 GHz")}
-                className="mr-3 w-4 h-4 text-blue-500 bg-gray-700 border-gray-600 rounded focus:ring-blue-500"
+                className="mr-3 w-4 h-4 military-checkbox text-blue-500 bg-gray-700 border-gray-600 rounded focus:ring-blue-500"
               />
               <span className="text-sm text-gray-300 font-medium tech-font flex-1">
                 2.4 GHz
@@ -234,7 +252,7 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
                 type="checkbox"
                 checked={localFilters.frequencyFilter.includes("5.8 GHz")}
                 onChange={() => handleFrequencyChange("5.8 GHz")}
-                className="mr-3 w-4 h-4 text-purple-500 bg-gray-700 border-gray-600 rounded focus:ring-purple-500"
+                className="mr-3 w-4 h-4 military-checkbox text-purple-500 bg-gray-700 border-gray-600 rounded focus:ring-purple-500"
               />
               <span className="text-sm text-gray-300 font-medium tech-font flex-1">
                 5.8 GHz
