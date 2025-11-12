@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { TbDrone } from "react-icons/tb";
-import { MdGpsFixed } from "react-icons/md";
+import { MdGpsFixed, MdClose } from "react-icons/md";
 import { IoMdRadio } from "react-icons/io";
 import type { Drone } from "../types/drone";
 
@@ -9,6 +9,7 @@ interface DroneListProps {
   selectedDrone: Drone | null;
   onDroneSelect: (drone: Drone) => void;
   onDroneTrack: (droneId: number) => void;
+  onClose?: () => void;
 }
 
 export const DroneList: React.FC<DroneListProps> = ({
@@ -16,6 +17,7 @@ export const DroneList: React.FC<DroneListProps> = ({
   selectedDrone,
   onDroneSelect,
   onDroneTrack,
+  onClose,
 }) => {
   const [sortBy, setSortBy] = useState<"name" | "altitude" | "speed">("name");
   const [filterStatus, setFilterStatus] = useState<
@@ -48,15 +50,26 @@ export const DroneList: React.FC<DroneListProps> = ({
 
   return (
     <div className="military-panel rounded-lg overflow-hidden flex flex-col h-full">
-      {/* Заголовок - ТОЛЬКО ЗАМЕНИЛИ ИКОНКУ */}
+      {/* Заголовок */}
       <div className="military-header px-4 py-3">
         <div className="flex items-center justify-between">
           <h2 className="text-green-400 font-bold flex items-center text-sm">
             <TbDrone className="w-5 h-5 mr-2" />
             АКТИВНЫЕ ДРОНЫ
           </h2>
-          <div className="tech-font text-green-400 text-xs">
-            {filteredDrones.length} / {drones.length}
+          <div className="flex items-center gap-4">
+            <div className="tech-font text-green-400 text-xs">
+              {filteredDrones.length} / {drones.length}
+            </div>
+            {onClose && (
+              <button
+                onClick={onClose}
+                className="lg:hidden military-button p-1.5 rounded text-green-400 hover:text-white"
+                title="Закрыть"
+              >
+                <MdClose className="w-5 h-5" />
+              </button>
+            )}
           </div>
         </div>
       </div>

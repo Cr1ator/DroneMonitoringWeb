@@ -1,9 +1,12 @@
 import React from "react";
 import { BiSolidMap } from "react-icons/bi";
 import { HiArrowTrendingUp } from "react-icons/hi2";
-import { PiMapPinSimpleAreaBold, PiMagnifyingGlassBold } from "react-icons/pi";
+import {
+  PiMapPinSimpleAreaBold,
+  PiMagnifyingGlassBold,
+  PiRulerBold,
+} from "react-icons/pi";
 import { MdClose } from "react-icons/md";
-import { FaRuler } from "react-icons/fa";
 
 interface MapControlsProps {
   mapType: "osm" | "satellite";
@@ -244,7 +247,7 @@ export const MapControls: React.FC<MapControlsProps> = ({
               }`}
               title="Включить/выключить линейку"
             >
-              <FaRuler className="w-4 h-4 mr-1" />
+              <PiRulerBold className="w-4 h-4 mr-1" />
               Линейка
             </button>
           </div>

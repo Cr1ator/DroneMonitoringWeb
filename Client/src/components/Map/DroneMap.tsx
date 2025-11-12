@@ -1098,6 +1098,7 @@ export const DroneMap: React.FC = () => {
             onFiltersChange={applyFilters}
             stats={stats}
             isConnected={isConnected}
+            onClose={() => setShowFilterPanel(false)}
           />
         </div>
       </div>
@@ -1361,6 +1362,7 @@ export const DroneMap: React.FC = () => {
               }
             }}
             onDroneTrack={handleDroneTrack}
+            onClose={() => setShowDroneList(false)}
           />
         </div>
       </div>
