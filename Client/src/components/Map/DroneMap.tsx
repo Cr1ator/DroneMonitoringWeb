@@ -19,7 +19,7 @@ import { Draw, Modify } from "ol/interaction";
 import * as signalR from "@microsoft/signalr";
 import { TbDrone } from "react-icons/tb";
 import { GiDeliveryDrone, GiRadioactive } from "react-icons/gi";
-import { MdClose, MdSettings, MdCheckCircle } from "react-icons/md";
+import { MdClose, MdSettings, MdCheckCircle, MdInfo } from "react-icons/md";
 import { HiOutlineFilter } from "react-icons/hi";
 import { FaChevronUp, FaChevronDown } from "react-icons/fa";
 import ReactDOMServer from "react-dom/server";
@@ -38,6 +38,7 @@ import { DroneList } from "../DroneList";
 import { DroneHistoryPanel } from "../DroneHistoryPanel";
 import { RulerControl } from "../RulerControl";
 import { RulerEditPanel } from "../RulerEditPanel";
+import { AboutModal } from "../AboutModal";
 
 // ... (Компоненты HamburgerIcon, DroneTooltip, AlarmPanel остаются без изменений)
 const HamburgerIcon = () => (
@@ -228,7 +229,7 @@ export const DroneMap: React.FC = () => {
   const [isConnected, setIsConnected] = useState(false);
   const [showDroneList, setShowDroneList] = useState(true);
   const [showFilterPanel, setShowFilterPanel] = useState(true);
-  const [showMapControls, setShowMapControls] = useState(true);
+  const [showMapControls, setShowMapControls] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [historyDroneId, setHistoryDroneId] = useState<number | null>(null);
   const [tooltip, setTooltip] = useState<{
@@ -252,17 +253,18 @@ export const DroneMap: React.FC = () => {
   const [isAlarmPanelCollapsed, setIsAlarmPanelCollapsed] = useState(false);
   const [isRulerPanelCollapsed, setIsRulerPanelCollapsed] = useState(false);
 
+  const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
+
   const isRulerActiveRef = useRef(isRulerActive);
   useEffect(() => {
     isRulerActiveRef.current = isRulerActive;
   }, [isRulerActive]);
 
-  // ... (useEffect для мобильных панелей, dronesRef, zonesRef, isPointInAnyZone, isDroneInAnyZone, useEffect для дронов в зонах - без изменений)
+  // ... (useEffect для мобильных панелей, dronesRef, zonesRef, isPointInAnyZone, isDroneInAnyZone, useEffect для дронов в зонах)
   useEffect(() => {
     if (window.innerWidth < 1024) {
       setShowDroneList(false);
       setShowFilterPanel(false);
-      setShowMapControls(false);
     }
   }, []);
 
@@ -1167,6 +1169,13 @@ export const DroneMap: React.FC = () => {
           >
             <MdSettings className="w-6 h-6" />
           </button>
+          <button
+            onClick={() => setIsAboutModalOpen(true)}
+            className="military-button p-3 rounded-lg text-green-400 hover:text-white shadow-xl backdrop-blur-sm bg-gray-900/90"
+            title="О проекте"
+          >
+            <MdInfo className="w-6 h-6" />
+          </button>
         </div>
 
         <div className="absolute bottom-4 left-4 flex flex-col space-y-2 z-20 lg:hidden">
@@ -1192,6 +1201,18 @@ export const DroneMap: React.FC = () => {
             title="Настройки карты"
           >
             <MdSettings className="w-6 h-6" />
+          </button>
+          <button
+            onClick={() => {
+              setIsAboutModalOpen(true);
+              setShowDroneList(false);
+              setShowFilterPanel(false);
+              setShowMapControls(false);
+            }}
+            className="military-button p-3 rounded-lg text-green-400 hover:text-white shadow-xl backdrop-blur-sm bg-gray-900/90"
+            title="О проекте"
+          >
+            <MdInfo className="w-6 h-6" />
           </button>
         </div>
 
@@ -1359,6 +1380,10 @@ export const DroneMap: React.FC = () => {
           />
         </div>
       )}
+      <AboutModal
+        isOpen={isAboutModalOpen}
+        onClose={() => setIsAboutModalOpen(false)}
+      />
     </div>
   );
 };
