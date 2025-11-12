@@ -40,7 +40,8 @@ import { RulerControl } from "../RulerControl";
 import { RulerEditPanel } from "../RulerEditPanel";
 import { AboutModal } from "../AboutModal";
 
-// ... (Компоненты HamburgerIcon, DroneTooltip, AlarmPanel остаются без изменений)
+import useLocalStorageState from "../../hooks/useLocalStorageState";
+
 const HamburgerIcon = () => (
   <svg
     className="w-6 h-6"
@@ -227,9 +228,18 @@ export const DroneMap: React.FC = () => {
   const [showTrajectories, setShowTrajectories] = useState(true);
   const [mapType, setMapType] = useState<"osm" | "satellite">("osm");
   const [isConnected, setIsConnected] = useState(false);
-  const [showDroneList, setShowDroneList] = useState(true);
-  const [showFilterPanel, setShowFilterPanel] = useState(true);
-  const [showMapControls, setShowMapControls] = useState(false);
+  const [showDroneList, setShowDroneList] = useLocalStorageState(
+    "showDroneList",
+    true
+  );
+  const [showFilterPanel, setShowFilterPanel] = useLocalStorageState(
+    "showFilterPanel",
+    true
+  );
+  const [showMapControls, setShowMapControls] = useLocalStorageState(
+    "showMapControls",
+    false
+  );
   const [showHistory, setShowHistory] = useState(false);
   const [historyDroneId, setHistoryDroneId] = useState<number | null>(null);
   const [tooltip, setTooltip] = useState<{
@@ -250,7 +260,8 @@ export const DroneMap: React.FC = () => {
   );
   const [isMovingVertex, setIsMovingVertex] = useState<boolean>(false);
   const [showRulerControlPanel, setShowRulerControlPanel] = useState(true);
-  const [isAlarmPanelCollapsed, setIsAlarmPanelCollapsed] = useState(false);
+  const [isAlarmPanelCollapsed, setIsAlarmPanelCollapsed] =
+    useLocalStorageState("isAlarmPanelCollapsed", false);
   const [isRulerPanelCollapsed, setIsRulerPanelCollapsed] = useState(false);
 
   const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
