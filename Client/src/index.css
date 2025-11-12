@@ -162,6 +162,18 @@
   }
 }
 
+@keyframes warning-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.15);
+    opacity: 0.75;
+  }
+}
+
 .animate-modal-in {
   animation: modal-fade-in 0.3s ease-out forwards;
 }

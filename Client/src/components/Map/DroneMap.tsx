@@ -18,7 +18,8 @@ import { getDistance as getGeodesicDistance, offset } from "ol/sphere";
 import { Draw, Modify } from "ol/interaction";
 import * as signalR from "@microsoft/signalr";
 import { TbDrone } from "react-icons/tb";
-import { GiDeliveryDrone, GiRadioactive } from "react-icons/gi";
+import { GiDeliveryDrone } from "react-icons/gi";
+import { IoWarningOutline } from "react-icons/io5";
 import { MdClose, MdSettings, MdCheckCircle, MdInfo } from "react-icons/md";
 import { HiOutlineFilter } from "react-icons/hi";
 import { FaChevronUp, FaChevronDown } from "react-icons/fa";
@@ -145,10 +146,10 @@ const AlarmPanel: React.FC<{
     >
       <div className="military-panel border-2 border-red-500 bg-red-900/95 backdrop-blur-sm px-3 py-2 md:px-4 md:py-3 rounded-lg shadow-2xl animate-pulse">
         <div className="flex items-start space-x-2 md:space-x-3">
-          <GiRadioactive className="w-6 h-6 md:w-7 md:h-7 text-red-400 animate-spin flex-shrink-0 mt-0.5" />
+          <IoWarningOutline className="w-6 h-6 md:w-7 md:h-7 text-red-400 animate-[warning-pulse_1.5s_ease-in-out_infinite] flex-shrink-0 mt-0.5" />
           <div className="grow min-w-0">
             <div className="text-red-200 font-bold text-sm md:text-base mb-1">
-              ⚠️ ТРЕВОГА!
+              ТРЕВОГА!
             </div>
             <div className="text-red-300 text-xs md:text-sm mb-2">
               Обнаружено {totalDrones} дрон(ов) в {activeZones.length}{" "}
@@ -1154,7 +1155,7 @@ export const DroneMap: React.FC = () => {
                 className="fixed top-0 left-1/2 transform -translate-x-1/2 z-[60] military-button p-2 rounded-b-lg text-red-400 animate-pulse"
                 title="Показать тревогу"
               >
-                <GiRadioactive className="w-5 h-5 mr-2" />
+                <IoWarningOutline className="w-5 h-5 mr-2" />
                 <span>ТРЕВОГА</span>
                 <FaChevronDown className="w-4 h-4 ml-2" />
               </button>
