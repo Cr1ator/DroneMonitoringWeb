@@ -1217,7 +1217,7 @@ export const DroneMap: React.FC = () => {
           h-full
           overflow-hidden
           ${showMapControls ? "w-80" : "w-0"}
-          fixed lg:absolute inset-y-0 lg:inset-auto left-0 lg:left-4 lg:top-4 lg:bottom-auto lg:h-auto z-40 lg:z-10
+          fixed lg:absolute inset-y-0 lg:inset-auto left-0 lg:left-4 lg:bottom-4 lg:top-auto lg:h-auto z-40 lg:z-10
         `}
         >
           <div className="w-80 h-full lg:h-auto">
