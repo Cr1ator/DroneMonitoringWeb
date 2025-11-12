@@ -1137,7 +1137,7 @@ export const DroneMap: React.FC = () => {
             {isAlarmPanelCollapsed && (
               <button
                 onClick={() => setIsAlarmPanelCollapsed(false)}
-                className="fixed top-2 left-1/2 transform -translate-x-1/2 z-[60] military-button p-2 rounded-b-lg text-red-400 animate-pulse"
+                className="fixed top-0 left-1/2 transform -translate-x-1/2 z-[60] military-button p-2 rounded-b-lg text-red-400 animate-pulse"
                 title="Показать тревогу"
               >
                 <GiRadioactive className="w-5 h-5 mr-2" />

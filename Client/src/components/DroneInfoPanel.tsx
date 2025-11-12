@@ -69,9 +69,8 @@ export const DroneInfoPanel: React.FC<DroneInfoPanelProps> = ({
   const loadDroneHistory = async () => {
     setLoading(true);
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || "";
       const response = await fetch(
-        `${apiUrl}/api/drones/${drone.id}/history?limit=20`
+        `http://localhost:5216/api/drones/${drone.id}/history?limit=20`
       );
       if (response.ok) {
         const data = await response.json();
@@ -182,17 +181,19 @@ export const DroneInfoPanel: React.FC<DroneInfoPanelProps> = ({
   return (
     <div
       className={`
-      fixed bottom-2 right-2 left-2
-      md:bottom-4 md:left-auto ${
-        isListVisible ? "lg:right-[25rem]" : "md:right-4"
-      }
-      w-auto md:w-96
-      max-h-[80vh] md:max-h-[calc(100vh-6rem)]
-      military-panel rounded-lg shadow-2xl
-      animate-slideInRight
-      flex flex-col overflow-hidden
-      z-50 /* <-- ИЗМЕНЕНО: z-index увеличен с 40 до 50 */
+      bg-gray-900 h-full
       transition-all duration-300 ease-in-out
+      fixed inset-y-0 right-0 z-50 w-full sm:w-96
+      transform translate-x-0
+      lg:fixed lg:bottom-2 lg:right-2 lg:left-2
+      lg:md:bottom-4 lg:md:left-auto ${
+        isListVisible ? "lg:right-[25rem]" : "lg:md:right-4"
+      }
+      lg:w-auto lg:md:w-96
+      lg:h-auto lg:max-h-[80vh] lg:md:max-h-[calc(100vh-6rem)]
+      lg:inset-y-auto lg:transform-none
+      military-panel rounded-none lg:rounded-lg shadow-2xl
+      flex flex-col overflow-hidden
     `}
     >
       {/* Заголовок */}
@@ -214,12 +215,14 @@ export const DroneInfoPanel: React.FC<DroneInfoPanelProps> = ({
             </svg>
             <span className="truncate">{drone.name}</span>
           </h3>
+          {/* Кнопка закрытия для десктопа */}
           <button
             onClick={onClose}
-            className="text-white hover:text-gray-200 transition-colors ml-2"
+            className="hidden lg:block military-button p-2 rounded text-gray-400 hover:text-white ml-2"
+            title="Закрыть"
           >
             <svg
-              className="w-5 h-5 md:w-6 md:h-6"
+              className="w-5 h-5"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -354,12 +357,10 @@ export const DroneInfoPanel: React.FC<DroneInfoPanelProps> = ({
             История полётов (последние 20)
           </h4>
 
-          {/* --- ИЗМЕНЕНО: Добавлен относительный контейнер с минимальной высотой для стабильности --- */}
           <div
             className="relative military-scroll overflow-y-auto"
             style={{ minHeight: "256px", maxHeight: "256px" }}
           >
-            {/* --- ИЗМЕНЕНО: Оверлей загрузки, который появляется только при ОБНОВЛЕНИИ данных --- */}
             {loading && history.length > 0 && (
               <div className="absolute inset-0 bg-gray-800/70 backdrop-blur-sm flex items-center justify-center z-10 rounded-lg">
                 <div className="text-center text-gray-400">
@@ -369,9 +370,7 @@ export const DroneInfoPanel: React.FC<DroneInfoPanelProps> = ({
               </div>
             )}
 
-            {/* --- ИЗМЕНЕНО: Логика отображения контента --- */}
             {loading && history.length === 0 ? (
-              // Начальная загрузка, когда данных еще нет
               <div
                 className="flex items-center justify-center"
                 style={{ height: "240px" }}
@@ -382,7 +381,6 @@ export const DroneInfoPanel: React.FC<DroneInfoPanelProps> = ({
                 </div>
               </div>
             ) : history.length > 0 ? (
-              // Отображение списка, если есть данные
               <div className="space-y-2">
                 {history.map((point, index) => (
                   <div
@@ -418,7 +416,6 @@ export const DroneInfoPanel: React.FC<DroneInfoPanelProps> = ({
                 ))}
               </div>
             ) : (
-              // Сообщение, если данных нет
               <div
                 className="flex items-center justify-center"
                 style={{ height: "240px" }}
